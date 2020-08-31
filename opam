@@ -2,6 +2,9 @@ opam-version: "2.0"
 name: "ocaml-smtlib"
 version: "0.1.0"
 synopsis: "An OCaml API for working with some popular SMT solvers"
+description: """
+Based on ocaml-z3 by Arjun Guha, with added support for additional SMT solvers.
+"""
 maintainer: "Geoff Hulette <geoff@hulette.net>"
 authors: [
   "Arjun Guha <arjun@cs.umass.edu>"
@@ -9,6 +12,7 @@ authors: [
 ]
 homepage: "https://github.com/ghulette/ocaml-smtlib"
 bug-reports: "https://github.com/ghulette/ocaml-smtlib/issues"
+license: "MIT"
 build: [
   [make]
 ]
