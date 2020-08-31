@@ -90,7 +90,7 @@ let make_solver (z3_path : string) : solver =
       | SSymbol "success" -> solver
       | _ -> failwith "could not configure solver to :print-success"
   with
-    Sys_error ("Bad file descriptor") -> failwith "couldn't talk to solver, double-check path"
+    Sys_error msg -> failwith ("couldn't talk to solver, double-check path (" ^ msg ^ ")")
 
 let sexp_to_string (sexp : sexp) : string =
   let open Buffer in
