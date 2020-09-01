@@ -1,5 +1,0 @@
-version = "0.1.0"
-description = "An OCaml API for working with some popular SMT solvers"
-requires = "unix"
-archive(byte) = "smtlib.cma"
-archive(native) = "smtlib.cmxa"
