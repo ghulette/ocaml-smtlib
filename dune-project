@@ -14,4 +14,5 @@
 Based on ocaml-z3 by Arjun Guha, with added support for additional SMT solvers.")
   (depends
     (dune (>= 1.10))
-    (ocaml (>= "4.02.3"))))
+    (ocaml (>= "4.02.3"))
+    base-unix))

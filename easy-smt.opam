@@ -12,6 +12,7 @@ bug-reports: "https://github.com/ghulette/ocaml-smtlib/issues"
 depends: [
   "dune" {>= "2.7" & >= "1.10"}
   "ocaml" {>= "4.02.3"}
+  "base-unix"
   "odoc" {with-doc}
 ]
 build: [

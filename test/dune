@@ -1,0 +1,3 @@
+(tests
+  (names smtlib_test)
+  (libraries easy-smt))
