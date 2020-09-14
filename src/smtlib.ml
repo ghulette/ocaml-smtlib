@@ -1,6 +1,10 @@
 include Smtlib_syntax
 
-type solver = { stdin : out_channel; stdout : in_channel; stdout_lexbuf : Lexing.lexbuf }
+type solver = {
+  stdin : out_channel;
+  stdout : in_channel;
+  stdout_lexbuf : Lexing.lexbuf
+}
 
 (* Does not flush *)
 let rec write_sexp (out_chan : out_channel) (e : sexp): unit = match e with
@@ -75,14 +79,19 @@ let make_solver (z3_path : string) : solver =
   (* If the ocaml ends of the pipes aren't marked close-on-exec, they
      will remain open in the fork/exec'd z3 process, and z3 won't exit
      when our main ocaml process ends. *)
-  let _ = set_close_on_exec z3_stdin_writer; set_close_on_exec z3_stdout_reader in
+  set_close_on_exec z3_stdin_writer;
+  set_close_on_exec z3_stdout_reader;
   let pid = create_process z3_path [| z3_path; "-in"; "-smt2" |]
     z3_stdin z3_stdout stderr in
   let in_chan = in_channel_of_descr z3_stdout_reader in
   let out_chan = out_channel_of_descr z3_stdin_writer in
   set_binary_mode_out out_chan false;
   set_binary_mode_in in_chan false;
-  let solver = { stdin = out_chan; stdout = in_chan; stdout_lexbuf = Lexing.from_channel in_chan } in
+  let solver = {
+    stdin = out_chan;
+    stdout = in_chan;
+    stdout_lexbuf = Lexing.from_channel in_chan
+  } in
   _solvers := (pid, solver) :: !_solvers;
   _names := (solver, ref StringMap.empty) :: !_names;
   try
