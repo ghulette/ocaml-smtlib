@@ -1,0 +1,8 @@
+(declare-fun int_of_bool (Bool) Int)
+(assert (= (int_of_bool false) 0))
+(assert (= (int_of_bool true) 1))
+(declare-fun bool_of_int (Int) Bool)
+(assert (forall ((x Int)) (=> (>= 0 x) (bool_of_int x) true)))
+(assert (forall ((x Int)) (=> (< 0 x) (bool_of_int x) false)))
+(check-sat)
+(get-model)

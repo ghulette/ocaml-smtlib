@@ -2,8 +2,8 @@ open Easy_smt.Smtlib
 open Smtlib_test
 
 let test1 solv =
-  declare_const solv (Id "x") (Sort (Id "Int"));
-  declare_const solv (Id "y") (Sort (Id "Int"));
+  declare_const solv (Id "x") int_sort;
+  declare_const solv (Id "y") int_sort;
   let x = const "x" in
   let y = const "y" in
   assert_ solv (equals x (int_to_term 5));

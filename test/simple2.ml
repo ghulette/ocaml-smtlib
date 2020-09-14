@@ -1,14 +1,10 @@
 open Easy_smt.Smtlib
 open Smtlib_test
 
-let test1 solv =
-  let int_sort = Sort (Id "Int") in
-  declare_const solv (Id "x") int_sort;
-  declare_const solv (Id "y") int_sort;
-  let x = const "x" in
-  let y = const "y" in
-  assert_ solv (equals x (int_to_term 7));
-  assert_ solv (equals y (add x (int_to_term 1)))
+let test solv =
+  declare_fun solv (Id "int_of_bool") [bool_sort] int_sort;
+  assert_ solv (equals (App (Id "int_of_bool", [bool_to_term false])) (int_to_term 0));
+  assert_ solv (equals (App (Id "int_of_bool", [bool_to_term true])) (int_to_term 1))
 
 let () =
-  run_test test1
+  run_test test
