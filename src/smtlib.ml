@@ -167,20 +167,13 @@ type tactic =
   | Then of tactic list
 
 let rec tactic_to_sexp (t : tactic) : sexp = match t with
-  | Simplify ->
-    SSymbol "simplify"
-  | SolveEQs ->
-    SSymbol "solve-eqs"
-  | BitBlast ->
-    SSymbol "bit-blast"
-  | AIG ->
-    SSymbol "aig"
-  | SAT ->
-    SSymbol "sat"
-  | SMT ->
-    SSymbol "smt"
-  | QFBV ->
-    SSymbol "qfbv"
+  | Simplify -> SSymbol "simplify"
+  | SolveEQs -> SSymbol "solve-eqs"
+  | BitBlast -> SSymbol "bit-blast"
+  | AIG -> SSymbol "aig"
+  | SAT -> SSymbol "sat"
+  | SMT -> SSymbol "smt"
+  | QFBV -> SSymbol "qfbv"
   | UsingParams (t', params) ->
     let param_to_sexp (keyword, value) =
       [ SKeyword keyword; SSymbol (string_of_bool value) ] in
@@ -363,27 +356,17 @@ let xor term1 term2 = match term1, term2 with
   | _ -> App (Id "xor", [term1; term2])
 
 let not_ term = App (Id "not", [term])
-
 let ite e1 e2 e3 = App (Id "ite", [e1; e2; e3])
-
 let implies = app2 "=>"
-
 let add = app2 "+"
-
 let sub = app2 "-"
-
 let mul = app2 "*"
-
 let lt = app2 "<"
-
 let gt = app2 ">"
-
 let lte = app2 "<="
-
 let gte = app2 ">="
 
 let bv n w = BitVec (n, w)
-
 let bv64 n = BitVec64 n
 
 let bvadd = app2 "bvadd"
