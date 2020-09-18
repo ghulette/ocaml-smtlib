@@ -217,7 +217,7 @@ let expect_success (solver : solver) (sexp : sexp) : unit =
   | SSymbol "success" -> ()
   | SList [SSymbol "error"; SString x] -> failwith x
   | sexp -> failwith ("expected either success or error from solver, got " ^
-                      (sexp_to_string sexp))
+                     (sexp_to_string sexp))
 
 let declare_const (solver : solver) (id : identifier) (sort : sort) : unit =
   expect_success solver
@@ -254,14 +254,12 @@ let read_objectives (solver : solver) : unit =
   | s -> failwith ("unexpected result in optimized objective, got " ^ sexp_to_string s)
 
 let rec check_sat (solver : solver) : check_sat_result =
-  let fail sexp  = failwith ("unexpected result from (check-sat), got " ^
-                       sexp_to_string sexp) in
+  let fail sexp  = failwith ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
-      | SInt n ->
-        read_sat @@ read solver
-      | sexp ->
-        fail sexp in
+      | SInt n -> read_sat @@ read solver
+      | sexp -> fail sexp
+    in
     match sexp with
     | SSymbol "sat" -> Sat
     | SSymbol "unsat" -> Unsat
@@ -269,19 +267,16 @@ let rec check_sat (solver : solver) : check_sat_result =
     | SSymbol "|->" -> match_map ()
     | SSymbol sym -> read_sat @@ read solver
     | SList sexp -> read_sat @@ read solver
-    | sexp -> failwith ("unexpected result from (check-sat), got " ^
-                        sexp_to_string sexp) in
+    | sexp -> fail sexp
+  in
   read_sat @@ command solver (SList [SSymbol "check-sat"])
 
 let rec check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
-  let fail sexp  = failwith ("unexpected result from (check-sat-using), got " ^
-                       sexp_to_string sexp) in
+  let fail sexp = failwith ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
-      | SInt n ->
-        read_sat @@ read solver
-      | sexp ->
-        fail sexp in
+      | SInt n -> read_sat @@ read solver
+      | sexp -> fail sexp in
     match sexp with
     | SSymbol "sat" -> Sat
     | SSymbol "unsat" -> Unsat
@@ -289,8 +284,8 @@ let rec check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
     | SSymbol "|->" -> match_map ()
     | SSymbol sym -> read_sat @@ read solver
     | SList sexp -> read_sat @@ read solver
-    | sexp -> failwith ("unexpected result from (check-sat-using), got " ^
-                        sexp_to_string sexp) in
+    | sexp -> fail sexp
+  in
   let cmd = (SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
   read_sat @@ command solver cmd
 
@@ -369,25 +364,25 @@ let gte = app2 ">="
 let bv n w = BitVec (n, w)
 let bv64 n = BitVec64 n
 
-let bvadd = app2 "bvadd"
-let bvsub = app2 "bvsub"
-let bvmul = app2 "bvmul"
+let bvadd  = app2 "bvadd"
+let bvsub  = app2 "bvsub"
+let bvmul  = app2 "bvmul"
 let bvurem = app2 "bvurem"
 let bvsrem = app2 "bvsrem"
 let bvsmod = app2 "bvsmod"
-let bvshl = app2 "bvshl"
+let bvshl  = app2 "bvshl"
 let bvlshr = app2 "bvlshr"
 let bvashr = app2 "bvashr"
-let bvor = app2 "bvor"
-let bvand = app2 "bvand"
+let bvor   = app2 "bvor"
+let bvand  = app2 "bvand"
 let bvnand = app2 "bvnand"
-let bvnor = app2 "bvnor"
+let bvnor  = app2 "bvnor"
 let bvxnor = app2 "bvxnor"
 let bvudiv = app2 "bvudiv"
 let bvsdiv = app2 "bvsdiv"
-let bvugt = app2 "bvugt"
-let bvuge = app2 "bvuge"
-let bvult = app2 "bvult"
-let bvule = app2 "bvule"
-let bvneg = app1 "bvneg"
-let bvnot = app1 "bvnot"
+let bvugt  = app2 "bvugt"
+let bvuge  = app2 "bvuge"
+let bvult  = app2 "bvult"
+let bvule  = app2 "bvule"
+let bvneg  = app1 "bvneg"
+let bvnot  = app1 "bvnot"
