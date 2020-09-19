@@ -1,4 +1,4 @@
-include Smtlib_syntax
+include Sexpr_syntax
 
 type solver = {
   stdin : out_channel;
@@ -6,42 +6,17 @@ type solver = {
   stdout_lexbuf : Lexing.lexbuf
 }
 
-(* Does not flush *)
-let rec write_sexp (out_chan : out_channel) (e : sexp): unit = match e with
-  | SInt n -> output_string out_chan (string_of_int n)
-  | SBitVec (n, w) -> Printf.fprintf out_chan "(_ bv%d %d)" n w
-  | SBitVec64 n -> Printf.fprintf out_chan "(_ bv%Ld 64)" n
-  | SSymbol str -> output_string out_chan str
-  | SKeyword str -> output_string out_chan str
-  | SString str ->
-    (output_char out_chan '(';
-     output_string out_chan str;
-     output_char out_chan ')')
-  | SList lst ->
-    (output_char out_chan '(';
-     write_sexp_list out_chan lst;
-     output_char out_chan ')')
-
-and write_sexp_list (out_chan : out_channel) (es : sexp list) : unit =
-  match es with
-    | [] -> ()
-    | [e] -> write_sexp out_chan e
-    | e :: es ->
-      (write_sexp out_chan e;
-       output_char out_chan ' ';
-       write_sexp_list out_chan es)
-
-let write (solver : solver) (e : sexp) : unit =
-  write_sexp solver.stdin e;
+let write solver e : unit =
+  Sexpr.write_sexp solver.stdin e;
   output_char solver.stdin '\n';
   flush solver.stdin
 
 let read (solver : solver) : sexp =
-  Smtlib_parser.sexp Smtlib_lexer.token solver.stdout_lexbuf
+  Sexpr_parser.sexp Sexpr_lexer.token solver.stdout_lexbuf
 
-let command (solver : solver) (sexp : sexp) = write solver sexp; read solver
+let command solver sexp = write solver sexp; read solver
 
-let silent_command (solver : solver) (sexp : sexp) = write solver sexp
+let silent_command solver sexp = write solver sexp
 
 let print_success_command =
   SList [SSymbol "set-option"; SKeyword ":print-success"; SSymbol "true"]

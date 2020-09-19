@@ -196,7 +196,7 @@ val bvnot : term -> term
 (** {1 Low-level interface} *)
 
 (** The variant of s-expressions used by SMT-LIB. *)
-type sexp = Smtlib_syntax.sexp =
+type sexp = Sexpr_syntax.sexp =
   | SList of sexp list
   | SSymbol of string
   | SString of string

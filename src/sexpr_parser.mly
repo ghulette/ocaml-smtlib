@@ -1,5 +1,5 @@
 %{
-open Smtlib_syntax
+open Sexpr_syntax
 %}
 
 %token LPAREN RPAREN
@@ -11,7 +11,7 @@ open Smtlib_syntax
 %token EOF
 
 %start sexp
-%type <Smtlib_syntax.sexp> sexp
+%type <Sexpr_syntax.sexp> sexp
 
 %%
 
