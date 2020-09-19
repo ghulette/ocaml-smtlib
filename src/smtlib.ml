@@ -60,7 +60,7 @@ let handle_sigchild (_ : int) : unit =
   else
     begin
       let open Printf in
-      let (pid, status) = Unix.waitpid [] (-1) in
+      let (pid, _) = Unix.waitpid [] (-1) in
       eprintf "solver child (pid %d) exited\n%!" pid;
       try
         let solver = List.assoc pid !_solvers in
@@ -203,7 +203,7 @@ let rec term_to_sexp (term : term) : sexp = match term with
            SList [SList [SSymbol x; term_to_sexp term1]];
            term_to_sexp term2]
 
-let rec sexp_to_term (sexp : sexp) : term = match sexp with
+let sexp_to_term (sexp : sexp) : term = match sexp with
   | SString s -> String s
   | SInt n -> Int n
   | SBitVec (n, w) -> BitVec (n, w)
@@ -250,14 +250,14 @@ let minimize (solver : solver) (term : term) : unit =
 
 let read_objectives (solver : solver) : unit =
   match read solver with
-  | SList [SSymbol "objectives"; SList l] -> ()
+  | SList [SSymbol "objectives"; SList _] -> ()
   | s -> failwith ("unexpected result in optimized objective, got " ^ sexp_to_string s)
 
-let rec check_sat (solver : solver) : check_sat_result =
+let check_sat (solver : solver) : check_sat_result =
   let fail sexp  = failwith ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
-      | SInt n -> read_sat @@ read solver
+      | SInt _ -> read_sat @@ read solver
       | sexp -> fail sexp
     in
     match sexp with
@@ -265,25 +265,25 @@ let rec check_sat (solver : solver) : check_sat_result =
     | SSymbol "unsat" -> Unsat
     | SSymbol "unknown" -> Unknown
     | SSymbol "|->" -> match_map ()
-    | SSymbol sym -> read_sat @@ read solver
-    | SList sexp -> read_sat @@ read solver
+    | SSymbol _ -> read_sat @@ read solver
+    | SList _ -> read_sat @@ read solver
     | sexp -> fail sexp
   in
   read_sat @@ command solver (SList [SSymbol "check-sat"])
 
-let rec check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
+let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
   let fail sexp = failwith ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
-      | SInt n -> read_sat @@ read solver
+      | SInt _ -> read_sat @@ read solver
       | sexp -> fail sexp in
     match sexp with
     | SSymbol "sat" -> Sat
     | SSymbol "unsat" -> Unsat
     | SSymbol "unknown" -> Unknown
     | SSymbol "|->" -> match_map ()
-    | SSymbol sym -> read_sat @@ read solver
-    | SList sexp -> read_sat @@ read solver
+    | SSymbol _ -> read_sat @@ read solver
+    | SList _ -> read_sat @@ read solver
     | sexp -> fail sexp
   in
   let cmd = (SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
