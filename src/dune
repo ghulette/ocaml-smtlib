@@ -1,6 +1,6 @@
-(ocamlyacc smtlib_parser)
-(ocamllex smtlib_lexer)
 (library
   (name easy_smt)
   (public_name easy-smt)
   (libraries unix))
+(ocamlyacc smtlib_parser)
+(ocamllex smtlib_lexer)
