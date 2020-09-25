@@ -289,6 +289,35 @@ let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
   let cmd = (SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
   read_sat @@ command solver cmd
 
+type model_val = {
+  model_val_sort : sort;
+  model_val_args : (identifier * sort) list;
+  model_val_term : term;
+}
+
+let is_model_val_const mv =
+  List.length mv.model_val_args = 0
+
+let get_model_vals (solver : solver) : (identifier * model_val) list =
+  let rec read_model sexp = match sexp with
+    | [] -> []
+    | (SList [SSymbol "define-fun"; SSymbol x; SList []; _; sexp]) :: rest ->
+      (Id x, sexp_to_term sexp) :: read_model rest
+    | _ :: rest -> read_model rest in
+  match command solver (SList [SSymbol "get-model"]) with
+  | SList (SSymbol "model" :: alist) -> read_model alist
+  | sexp -> failwith ("expected model, got " ^ (sexp_to_string sexp))
+
+let get_model (solver : solver) : (identifier * term) list =
+  let rec read_model sexp = match sexp with
+    | [] -> []
+    | (SList [SSymbol "define-fun"; SSymbol x; SList []; _; sexp]) :: rest ->
+      (Id x, sexp_to_term sexp) :: read_model rest
+    | _ :: rest -> read_model rest in
+  match command solver (SList [SSymbol "get-model"]) with
+  | SList (SSymbol "model" :: alist) -> read_model alist
+  | sexp -> failwith ("expected model, got " ^ (sexp_to_string sexp))
+
 let get_model (solver : solver) : (identifier * term) list =
   let rec read_model sexp = match sexp with
     | [] -> []
