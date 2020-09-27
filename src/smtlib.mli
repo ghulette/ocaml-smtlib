@@ -35,7 +35,7 @@ type term =
   | BitVec64 of int64
   | Const of identifier
   | App of identifier * term list
-  | Let of string * term * term
+  | Let of identifier * term * term
 
 (** Tactics to configure z3's solver strategy. *)
 type tactic =

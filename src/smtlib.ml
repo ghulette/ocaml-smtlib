@@ -153,7 +153,7 @@ type term =
   | BitVec64 of int64
   | Const of identifier
   | App of identifier * term list
-  | Let of string * term * term
+  | Let of identifier * term * term
 
 type tactic =
   | Simplify
@@ -198,7 +198,7 @@ let rec term_to_sexp = function
   | BitVec64 n -> SBitVec64 n
   | Const x -> id_to_sexp x
   | App (f, args) -> SList (id_to_sexp f :: List.map term_to_sexp args)
-  | Let (x, term1, term2) ->
+  | Let (Id x, term1, term2) ->
     SList [SSymbol "let";
            SList [SList [SSymbol x; term_to_sexp term1]];
            term_to_sexp term2]
