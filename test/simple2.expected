@@ -1,1 +1,2 @@
 sat
+int_of_bool(x!0 : Bool) : Int := (ite (= x!0 true) 1 0)

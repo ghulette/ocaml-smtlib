@@ -191,26 +191,29 @@ let rec sort_to_sexp (sort : sort) : sexp = match sort with
     SList ((id_to_sexp x) :: (List.map sort_to_sexp sorts))
   | BitVecSort n -> SList [ SSymbol "_"; SSymbol "BitVec"; SInt n ]
 
-let rec term_to_sexp (term : term) : sexp = match term with
+let rec term_to_sexp = function
   | String s -> SString s
   | Int n -> SInt n
   | BitVec (n, w) -> SBitVec (n, w)
   | BitVec64 n -> SBitVec64 n
   | Const x -> id_to_sexp x
-  | App (f, args) -> SList (id_to_sexp f :: (List.map term_to_sexp args))
+  | App (f, args) -> SList (id_to_sexp f :: List.map term_to_sexp args)
   | Let (x, term1, term2) ->
     SList [SSymbol "let";
            SList [SList [SSymbol x; term_to_sexp term1]];
            term_to_sexp term2]
 
-let sexp_to_term (sexp : sexp) : term = match sexp with
+let rec sexp_to_term = function
   | SString s -> String s
   | SInt n -> Int n
   | SBitVec (n, w) -> BitVec (n, w)
   | SBitVec64 n -> BitVec64 n
   | SSymbol x -> Const (Id x)
   | SList (SSymbol "-" :: SInt x :: []) -> Int (-x)
-  | _ -> failwith "unparsable term"
+  | SList (SSymbol f::args) ->
+    let ts = List.map sexp_to_term args in
+    App (Id f, ts)
+  | sexp -> failwith ("unparseable term " ^ sexp_to_string sexp)
 
 let expect_success (solver : solver) (sexp : sexp) : unit =
   match command solver sexp with
@@ -289,23 +292,38 @@ let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
   let cmd = (SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
   read_sat @@ command solver cmd
 
-let get_model (solver : solver) : (identifier * term) list =
-  let rec read_model sexp = match sexp with
-    | [] -> []
-    | (SList [SSymbol "define-fun"; SSymbol x; SList []; _; sexp]) :: rest ->
-      (Id x, sexp_to_term sexp) :: read_model rest
-    | _ :: rest -> read_model rest in
-  match command solver (SList [SSymbol "get-model"]) with
-  | SList (SSymbol "model" :: alist) -> read_model alist
-  | sexp -> failwith ("expected model, got " ^ (sexp_to_string sexp))
+let sexp_error expected sexp =
+  failwith ("expected " ^ expected ^ ", but got " ^ sexp_to_string sexp)
+
+type sorted_var = identifier * sort
+
+let sexp_to_sort = function
+  | SSymbol t -> Sort (Id t)
+  | sexp -> sexp_error "sort" sexp
+
+let sexp_to_sorted_var = function
+  | SList [SSymbol x; sexp] -> Id x, sexp_to_sort sexp
+  | sexp -> sexp_error "sorted var" sexp
+
+let sexp_to_model_val = function
+  | SList [SSymbol "define-fun"; SSymbol x; SList args; s; sexp] ->
+    let mv_sort = sexp_to_sort s in
+    let mv_term = sexp_to_term sexp in
+    let mv_args = List.map sexp_to_sorted_var args in
+    Id x, mv_sort, mv_args, mv_term
+  | sexp -> sexp_error "model val" sexp
+
+let get_model solver =
+  let cmd = SList [SSymbol "get-model"] in
+  match command solver cmd with
+  | SList (SSymbol "model" :: sexps) -> List.map sexp_to_model_val sexps
+  | sexp -> sexp_error "model" sexp
 
 let get_one_value (solver : solver) (e : term) : term =
-  let res = command solver
-      (SList [SSymbol "get-value"; SList [term_to_sexp e]]) in
-  match res with
+  let cmd = SList [SSymbol "get-value"; SList [term_to_sexp e]] in
+  match command solver cmd with
   | SList [SList [_; x]] -> sexp_to_term x
-  | sexp -> failwith ("expected a single pair, got " ^
-                      (sexp_to_string sexp))
+  | sexp -> sexp_error "a single pair" sexp
 
 let push (solver : solver) = expect_success solver (SList [SSymbol "push"])
 let pop (solver : solver) = expect_success solver (SList [SSymbol "pop"])
