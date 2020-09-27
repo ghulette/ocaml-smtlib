@@ -10,26 +10,23 @@ let sort_to_string = function
 let sorted_var_to_string (Id x, sort) =
   sprintf "%s : %s" x (sort_to_string sort)
 
-let model_value_to_string (Id x) mv =
-  let sort = sort_to_string (model_value_sort mv) in
-  let term = term_to_string (model_value_term mv) in
-  if (model_value_is_const mv) then
-    sprintf "%s : %s := %s" x sort term
+let model_value_to_string (Id x, sort, args, term) =
+  let sort_s = sort_to_string sort in
+  let term_s = term_to_string term in
+  if List.length args = 0 then
+    sprintf "%s : %s := %s" x sort_s term_s
   else
-    let args = List.map sorted_var_to_string (model_value_args mv) in
-    sprintf "%s(%s) : %s := %s" x (String.concat ", " args) sort term
+    let args_s = List.map sorted_var_to_string args in
+    sprintf "%s(%s) : %s := %s" x (String.concat ", " args_s) sort_s term_s
 
 let print_result_sat model =
   printf "sat\n";
-  let p (x, mv) = printf "%s\n" (model_value_to_string x mv) in
-  List.iter p model
+  List.iter (fun mv -> printf "%s\n" (model_value_to_string mv)) model
 
 let run_test fn =
   let solv = make_solver "z3" in
   fn solv;
   match check_sat solv with
-  | Sat ->
-    let model = get_model_values solv in
-    print_result_sat model
+  | Sat -> get_model solv |> print_result_sat
   | Unsat -> printf "unsat\n"
   | Unknown -> printf "unknown\n"

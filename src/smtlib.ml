@@ -297,19 +297,6 @@ let sexp_error expected sexp =
 
 type sorted_var = identifier * sort
 
-type model_value = {
-  model_value_args : sorted_var list;
-  model_value_sort : sort;
-  model_value_term : term
-}
-
-let model_value_args mv = mv.model_value_args
-let model_value_sort mv = mv.model_value_sort
-let model_value_term mv = mv.model_value_term
-
-let model_value_is_const mv =
-  List.length mv.model_value_args = 0
-
 let sexp_to_sort = function
   | SSymbol t -> Sort (Id t)
   | sexp -> sexp_error "sort" sexp
@@ -320,27 +307,16 @@ let sexp_to_sorted_var = function
 
 let sexp_to_model_val = function
   | SList [SSymbol "define-fun"; SSymbol x; SList args; s; sexp] ->
-    let model_value_sort = sexp_to_sort s in
-    let model_value_term = sexp_to_term sexp in
-    let model_value_args = List.map sexp_to_sorted_var args in
-    Id x, { model_value_args; model_value_sort; model_value_term }
+    let mv_sort = sexp_to_sort s in
+    let mv_term = sexp_to_term sexp in
+    let mv_args = List.map sexp_to_sorted_var args in
+    Id x, mv_sort, mv_args, mv_term
   | sexp -> sexp_error "model val" sexp
 
-let get_model_values (solver : solver) : (identifier * model_value) list =
+let get_model solver =
   let cmd = SList [SSymbol "get-model"] in
   match command solver cmd with
   | SList (SSymbol "model" :: sexps) -> List.map sexp_to_model_val sexps
-  | sexp -> sexp_error "model" sexp
-
-let get_model (solver : solver) : (identifier * term) list =
-  let rec read_model sexp = match sexp with
-    | [] -> []
-    | (SList [SSymbol "define-fun"; SSymbol x; SList []; _; sexp]) :: rest ->
-      (Id x, sexp_to_term sexp) :: read_model rest
-    | _ :: rest -> read_model rest in
-    let cmd = SList [SSymbol "get-model"] in
-    match command solver cmd with
-  | SList (SSymbol "model" :: alist) -> read_model alist
   | sexp -> sexp_error "model" sexp
 
 let get_one_value (solver : solver) (e : term) : term =

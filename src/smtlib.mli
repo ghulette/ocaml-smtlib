@@ -86,21 +86,11 @@ val check_sat : solver -> check_sat_result
     [(check-sat-using tactic)] *)
 val check_sat_using : tactic -> solver -> check_sat_result
 
-
+(** Variable identifier with an associated [sort] *)
 type sorted_var = identifier * sort
 
-type model_value
-
-val model_value_term : model_value -> term
-val model_value_sort : model_value -> sort
-val model_value_args : model_value -> sorted_var list
-val model_value_is_const : model_value -> bool
-
-(** [get_model_vals solver] runs the command [(get-model)] *)
-val get_model_values : solver -> (identifier * model_value) list
-
 (** [get_model solver] runs the command [(get-model)] *)
-val get_model : solver -> (identifier * term) list
+val get_model : solver -> (identifier * sort * sorted_var list * term) list
 
 (** [get_one_value solver e] runs the command [(get-value e)] *)
 val get_one_value : solver -> term -> term
