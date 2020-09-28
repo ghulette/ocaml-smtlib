@@ -198,10 +198,10 @@ let rec term_to_sexp = function
   | BitVec64 n -> SBitVec64 n
   | Const x -> id_to_sexp x
   | App (f, args) -> SList (id_to_sexp f :: List.map term_to_sexp args)
-  | Let (Id x, term1, term2) ->
-    SList [SSymbol "let";
-           SList [SList [SSymbol x; term_to_sexp term1]];
-           term_to_sexp term2]
+  | Let (Id x, t1, t2) ->
+    let args = SList [SList [SSymbol x; term_to_sexp t1]] in
+    let body = term_to_sexp t2 in
+    SList [SSymbol "let"; args; body]
 
 let rec sexp_to_term = function
   | SString s -> String s
