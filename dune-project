@@ -1,5 +1,5 @@
 (lang dune 2.7)
-(name easy-smt)
+(name ocaml-smtlib)
 
 (source (github ghulette/ocaml-smtlib))
 (generate_opam_files true)
@@ -8,8 +8,8 @@
 (authors "Geoff Hulette")
 
 (package
-  (name easy-smt)
-  (synopsis "An OCaml API for working with popular SMT solvers")
+  (name ocaml-smtlib)
+  (synopsis "A simple OCaml API for building/parsing SMTLIB2 expressions and interacting with some popular SMT solvers")
   (description "
 Based on ocaml-z3 by Arjun Guha, with added support for additional SMT solvers.")
   (depends

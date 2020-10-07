@@ -1,4 +1,4 @@
-open Easy_smt.Smtlib
+open Smtlib
 open Smtlib_test
 
 let test1 solv =

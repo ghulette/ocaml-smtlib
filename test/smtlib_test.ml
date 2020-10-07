@@ -1,4 +1,4 @@
-open Easy_smt.Smtlib
+open Smtlib
 open Printf
 
 let term_to_string t = term_to_sexp t |> sexp_to_string
