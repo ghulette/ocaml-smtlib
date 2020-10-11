@@ -319,7 +319,7 @@ let get_model solver =
   | SList (SSymbol "model" :: sexps) -> List.map sexp_to_model_val sexps
   | sexp -> sexp_error "model" sexp
 
-let get_one_value (solver : solver) (e : term) : term =
+let get_value (solver : solver) (e : term) : term =
   let cmd = SList [SSymbol "get-value"; SList [term_to_sexp e]] in
   match command solver cmd with
   | SList [SList [_; x]] -> sexp_to_term x
