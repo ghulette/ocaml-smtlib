@@ -92,8 +92,8 @@ type sorted_var = identifier * sort
 (** [get_model solver] runs the command [(get-model)] *)
 val get_model : solver -> (identifier * sort * sorted_var list * term) list
 
-(** [get_one_value solver e] runs the command [(get-value e)] *)
-val get_one_value : solver -> term -> term
+(** [get_value solver e] runs the command [(get-value e)] *)
+val get_value : solver -> term -> term
 
 (** [push solver] runs the command [(push)] *)
 val push : solver -> unit
