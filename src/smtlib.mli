@@ -216,6 +216,3 @@ val term_to_sexp : term -> sexp
 
 (** [sexp_to_string sexp] returns the s-expressions as a string. *)
 val sexp_to_string : sexp -> string
-
-(** [fresh_name solver base] returns a fresh symbol given a base name. *)
-val fresh_name : solver -> string -> sexp

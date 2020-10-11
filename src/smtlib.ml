@@ -50,21 +50,18 @@ let print_success_command =
    FDs when the solvers exit *)
 let _solvers : (int * solver) list ref = ref []
 
-module StringMap = Map.Make(String)
-
-let _names :  (solver * int StringMap.t ref) list ref = ref []
-
 let handle_sigchild (_ : int) : unit =
   if List.length !_solvers = 0
-  then ignore @@ Unix.waitpid [] (-1)
+  then Unix.waitpid [] (-1) |> ignore
   else
     begin
-      let open Printf in
       let (pid, _) = Unix.waitpid [] (-1) in
-      eprintf "solver child (pid %d) exited\n%!" pid;
+      Printf.eprintf "solver child (pid %d) exited\n%!" pid;
       try
         let solver = List.assoc pid !_solvers in
-        close_in_noerr solver.stdout; close_out_noerr solver.stdin
+        close_in_noerr solver.stdout;
+        close_out_noerr solver.stdin;
+        _solvers := List.remove_assoc pid !_solvers
       with
         _ -> ()
     end
@@ -93,7 +90,6 @@ let make_solver (z3_path : string) : solver =
     stdout_lexbuf = Lexing.from_channel in_chan
   } in
   _solvers := (pid, solver) :: !_solvers;
-  _names := (solver, ref StringMap.empty) :: !_names;
   try
     match command solver print_success_command with
       | SSymbol "success" -> solver
@@ -118,20 +114,6 @@ let sexp_to_string (sexp : sexp) : string =
     | x :: xs -> to_string x; add_char buf ' '; list_to_string xs in
   to_string sexp;
   contents buf
-
-let fresh_name (solver : solver) (base : string) : sexp =
-  let names =
-    try
-      List.assoc solver !_names
-    with _ -> failwith "Z3 instance doesn't have an associated fresh_name map" in
-  try
-    let n = StringMap.find base !names in
-    names := StringMap.add base (n+1) !names;
-    SSymbol (base ^ (string_of_int n))
-  with
-    Not_found ->
-    names := StringMap.add base 1 !names;
-    SSymbol (base ^ "0")
 
 type check_sat_result =
   | Sat
