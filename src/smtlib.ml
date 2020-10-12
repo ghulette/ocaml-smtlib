@@ -7,7 +7,7 @@ type solver = {
 }
 
 (* Does not flush *)
-let rec write_sexp (out_chan : out_channel) (e : sexp): unit = match e with
+let rec write_sexp out_chan = function
   | SInt n -> output_string out_chan (string_of_int n)
   | SBitVec (n, w) -> Printf.fprintf out_chan "(_ bv%d %d)" n w
   | SBitVec64 n -> Printf.fprintf out_chan "(_ bv%Ld 64)" n
@@ -22,14 +22,13 @@ let rec write_sexp (out_chan : out_channel) (e : sexp): unit = match e with
      write_sexp_list out_chan lst;
      output_char out_chan ')')
 
-and write_sexp_list (out_chan : out_channel) (es : sexp list) : unit =
-  match es with
-    | [] -> ()
-    | [e] -> write_sexp out_chan e
-    | e :: es ->
-      (write_sexp out_chan e;
-       output_char out_chan ' ';
-       write_sexp_list out_chan es)
+and write_sexp_list out_chan = function
+  | [] -> ()
+  | [e] -> write_sexp out_chan e
+  | e :: es ->
+    (write_sexp out_chan e;
+      output_char out_chan ' ';
+      write_sexp_list out_chan es)
 
 let write (solver : solver) (e : sexp) : unit =
   write_sexp solver.stdin e;
@@ -115,6 +114,8 @@ let sexp_to_string (sexp : sexp) : string =
   to_string sexp;
   contents buf
 
+exception Smtlib_error of string
+
 type check_sat_result =
   | Sat
   | Unsat
@@ -160,18 +161,17 @@ let rec tactic_to_sexp (t : tactic) : sexp = match t with
     let param_to_sexp (keyword, value) =
       [ SKeyword keyword; SSymbol (string_of_bool value) ] in
     SList ((SSymbol "using-params") :: (tactic_to_sexp t')
-           :: (List.concat @@ List.map param_to_sexp params))
+           :: (List.concat_map param_to_sexp params))
   | Then ts ->
     SList ((SSymbol "then") :: List.map tactic_to_sexp ts)
 
-let id_to_sexp (id : identifier) : sexp = match id with
-  | Id x -> SSymbol x
+let id_to_sexp (Id x) = SSymbol x
 
-let rec sort_to_sexp (sort : sort) : sexp = match sort with
+let rec sort_to_sexp = function
   | Sort x -> id_to_sexp x
   | SortApp (x, sorts) ->
     SList ((id_to_sexp x) :: (List.map sort_to_sexp sorts))
-  | BitVecSort n -> SList [ SSymbol "_"; SSymbol "BitVec"; SInt n ]
+  | BitVecSort n -> SList [SSymbol "_"; SSymbol "BitVec"; SInt n]
 
 let rec term_to_sexp = function
   | String s -> SString s
@@ -180,10 +180,10 @@ let rec term_to_sexp = function
   | BitVec64 n -> SBitVec64 n
   | Const x -> id_to_sexp x
   | App (f, args) -> SList (id_to_sexp f :: List.map term_to_sexp args)
-  | Let (x, term1, term2) ->
+  | Let (x, t1, t2) ->
     SList [SSymbol "let";
-           SList [SList [SSymbol x; term_to_sexp term1]];
-           term_to_sexp term2]
+           SList [SList [SSymbol x; term_to_sexp t1]];
+           term_to_sexp t2]
 
 let rec sexp_to_term = function
   | SString s -> String s

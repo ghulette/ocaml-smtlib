@@ -20,6 +20,8 @@ val make_solver : string -> solver
  command, that error is raised as an OCaml exception.
 *)
 
+exception Smtlib_error of string
+
 type identifier =
   | Id of string
 
