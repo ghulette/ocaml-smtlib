@@ -1,5 +1,9 @@
 include Smtlib_syntax
 
+exception Smtlib_error of string
+
+let smtlib_error msg = raise (Smtlib_error msg)
+
 type solver = {
   stdin : out_channel;
   stdout : in_channel;
@@ -92,9 +96,9 @@ let make_solver (z3_path : string) : solver =
   try
     match command solver print_success_command with
       | SSymbol "success" -> solver
-      | _ -> failwith "could not configure solver to :print-success"
+      | _ -> smtlib_error "could not configure solver to :print-success"
   with
-    Sys_error msg -> failwith ("couldn't talk to solver, double-check path (" ^ msg ^ ")")
+    Sys_error msg -> smtlib_error ("couldn't talk to solver, double-check path (" ^ msg ^ ")")
 
 let sexp_to_string (sexp : sexp) : string =
   let open Buffer in
@@ -113,8 +117,6 @@ let sexp_to_string (sexp : sexp) : string =
     | x :: xs -> to_string x; add_char buf ' '; list_to_string xs in
   to_string sexp;
   contents buf
-
-exception Smtlib_error of string
 
 type check_sat_result =
   | Sat
@@ -195,13 +197,13 @@ let rec sexp_to_term = function
   | SList (SSymbol f::args) ->
     let ts = List.map sexp_to_term args in
     App (Id f, ts)
-  | sexp -> failwith ("unparseable term " ^ sexp_to_string sexp)
+  | sexp -> smtlib_error ("unparseable term " ^ sexp_to_string sexp)
 
 let expect_success (solver : solver) (sexp : sexp) : unit =
   match command solver sexp with
   | SSymbol "success" -> ()
-  | SList [SSymbol "error"; SString x] -> failwith x
-  | sexp -> failwith ("expected either success or error from solver, got " ^
+  | SList [SSymbol "error"; SString x] -> smtlib_error x
+  | sexp -> smtlib_error ("expected either success or error from solver, got " ^
                      (sexp_to_string sexp))
 
 let declare_const (solver : solver) (id : identifier) (sort : sort) : unit =
@@ -236,10 +238,10 @@ let minimize (solver : solver) (term : term) : unit =
 let read_objectives (solver : solver) : unit =
   match read solver with
   | SList [SSymbol "objectives"; SList _] -> ()
-  | s -> failwith ("unexpected result in optimized objective, got " ^ sexp_to_string s)
+  | s -> smtlib_error ("unexpected result in optimized objective, got " ^ sexp_to_string s)
 
 let check_sat (solver : solver) : check_sat_result =
-  let fail sexp  = failwith ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
+  let fail sexp  = smtlib_error ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
       | SInt _ -> read_sat @@ read solver
@@ -257,7 +259,7 @@ let check_sat (solver : solver) : check_sat_result =
   read_sat @@ command solver (SList [SSymbol "check-sat"])
 
 let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
-  let fail sexp = failwith ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
+  let fail sexp = smtlib_error ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
       | SInt _ -> read_sat @@ read solver
@@ -275,7 +277,7 @@ let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
   read_sat @@ command solver cmd
 
 let sexp_error expected sexp =
-  failwith ("expected " ^ expected ^ ", but got " ^ sexp_to_string sexp)
+  smtlib_error ("expected " ^ expected ^ ", but got " ^ sexp_to_string sexp)
 
 type sorted_var = identifier * sort
 
