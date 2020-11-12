@@ -1,5 +1,9 @@
 include Smtlib_syntax
 
+exception Smtlib_error of string
+
+let smtlib_error msg = raise (Smtlib_error msg)
+
 type solver = {
   stdin : out_channel;
   stdout : in_channel;
@@ -7,7 +11,7 @@ type solver = {
 }
 
 (* Does not flush *)
-let rec write_sexp (out_chan : out_channel) (e : sexp): unit = match e with
+let rec write_sexp out_chan = function
   | SInt n -> output_string out_chan (string_of_int n)
   | SBitVec (n, w) -> Printf.fprintf out_chan "(_ bv%d %d)" n w
   | SBitVec64 n -> Printf.fprintf out_chan "(_ bv%Ld 64)" n
@@ -22,14 +26,13 @@ let rec write_sexp (out_chan : out_channel) (e : sexp): unit = match e with
      write_sexp_list out_chan lst;
      output_char out_chan ')')
 
-and write_sexp_list (out_chan : out_channel) (es : sexp list) : unit =
-  match es with
-    | [] -> ()
-    | [e] -> write_sexp out_chan e
-    | e :: es ->
-      (write_sexp out_chan e;
-       output_char out_chan ' ';
-       write_sexp_list out_chan es)
+and write_sexp_list out_chan = function
+  | [] -> ()
+  | [e] -> write_sexp out_chan e
+  | e :: es ->
+    (write_sexp out_chan e;
+      output_char out_chan ' ';
+      write_sexp_list out_chan es)
 
 let write (solver : solver) (e : sexp) : unit =
   write_sexp solver.stdin e;
@@ -93,9 +96,9 @@ let make_solver (z3_path : string) : solver =
   try
     match command solver print_success_command with
       | SSymbol "success" -> solver
-      | _ -> failwith "could not configure solver to :print-success"
+      | _ -> smtlib_error "could not configure solver to :print-success"
   with
-    Sys_error msg -> failwith ("couldn't talk to solver, double-check path (" ^ msg ^ ")")
+    Sys_error msg -> smtlib_error ("couldn't talk to solver, double-check path (" ^ msg ^ ")")
 
 let sexp_to_string (sexp : sexp) : string =
   let open Buffer in
@@ -160,18 +163,17 @@ let rec tactic_to_sexp (t : tactic) : sexp = match t with
     let param_to_sexp (keyword, value) =
       [ SKeyword keyword; SSymbol (string_of_bool value) ] in
     SList ((SSymbol "using-params") :: (tactic_to_sexp t')
-           :: (List.concat @@ List.map param_to_sexp params))
+           :: (List.concat_map param_to_sexp params))
   | Then ts ->
     SList ((SSymbol "then") :: List.map tactic_to_sexp ts)
 
-let id_to_sexp (id : identifier) : sexp = match id with
-  | Id x -> SSymbol x
+let id_to_sexp (Id x) = SSymbol x
 
-let rec sort_to_sexp (sort : sort) : sexp = match sort with
+let rec sort_to_sexp = function
   | Sort x -> id_to_sexp x
   | SortApp (x, sorts) ->
     SList ((id_to_sexp x) :: (List.map sort_to_sexp sorts))
-  | BitVecSort n -> SList [ SSymbol "_"; SSymbol "BitVec"; SInt n ]
+  | BitVecSort n -> SList [SSymbol "_"; SSymbol "BitVec"; SInt n]
 
 let rec term_to_sexp = function
   | String s -> SString s
@@ -180,10 +182,10 @@ let rec term_to_sexp = function
   | BitVec64 n -> SBitVec64 n
   | Const x -> id_to_sexp x
   | App (f, args) -> SList (id_to_sexp f :: List.map term_to_sexp args)
-  | Let (x, term1, term2) ->
+  | Let (x, t1, t2) ->
     SList [SSymbol "let";
-           SList [SList [SSymbol x; term_to_sexp term1]];
-           term_to_sexp term2]
+           SList [SList [SSymbol x; term_to_sexp t1]];
+           term_to_sexp t2]
 
 let rec sexp_to_term = function
   | SString s -> String s
@@ -195,13 +197,13 @@ let rec sexp_to_term = function
   | SList (SSymbol f::args) ->
     let ts = List.map sexp_to_term args in
     App (Id f, ts)
-  | sexp -> failwith ("unparseable term " ^ sexp_to_string sexp)
+  | sexp -> smtlib_error ("unparseable term " ^ sexp_to_string sexp)
 
 let expect_success (solver : solver) (sexp : sexp) : unit =
   match command solver sexp with
   | SSymbol "success" -> ()
-  | SList [SSymbol "error"; SString x] -> failwith x
-  | sexp -> failwith ("expected either success or error from solver, got " ^
+  | SList [SSymbol "error"; SString x] -> smtlib_error x
+  | sexp -> smtlib_error ("expected either success or error from solver, got " ^
                      (sexp_to_string sexp))
 
 let declare_const (solver : solver) (id : identifier) (sort : sort) : unit =
@@ -236,10 +238,10 @@ let minimize (solver : solver) (term : term) : unit =
 let read_objectives (solver : solver) : unit =
   match read solver with
   | SList [SSymbol "objectives"; SList _] -> ()
-  | s -> failwith ("unexpected result in optimized objective, got " ^ sexp_to_string s)
+  | s -> smtlib_error ("unexpected result in optimized objective, got " ^ sexp_to_string s)
 
 let check_sat (solver : solver) : check_sat_result =
-  let fail sexp  = failwith ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
+  let fail sexp  = smtlib_error ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
       | SInt _ -> read_sat @@ read solver
@@ -257,7 +259,7 @@ let check_sat (solver : solver) : check_sat_result =
   read_sat @@ command solver (SList [SSymbol "check-sat"])
 
 let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
-  let fail sexp = failwith ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
+  let fail sexp = smtlib_error ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match read solver with
       | SInt _ -> read_sat @@ read solver
@@ -275,7 +277,7 @@ let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
   read_sat @@ command solver cmd
 
 let sexp_error expected sexp =
-  failwith ("expected " ^ expected ^ ", but got " ^ sexp_to_string sexp)
+  smtlib_error ("expected " ^ expected ^ ", but got " ^ sexp_to_string sexp)
 
 type sorted_var = identifier * sort
 
