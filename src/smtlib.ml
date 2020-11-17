@@ -12,32 +12,23 @@ type solver = {
 
 (* Does not flush *)
 let rec write_sexp out_chan = function
-  | SInt n -> output_string out_chan (string_of_int n)
+  | SInt n -> Printf.fprintf out_chan "%d" n
   | SBitVec (n, w) -> Printf.fprintf out_chan "(_ bv%d %d)" n w
   | SBitVec64 n -> Printf.fprintf out_chan "(_ bv%Ld 64)" n
   | SSymbol str -> output_string out_chan str
   | SKeyword str -> output_string out_chan str
-  | SString str ->
-    (output_char out_chan '(';
-     output_string out_chan str;
-     output_char out_chan ')')
-  | SList lst ->
-    (output_char out_chan '(';
-     write_sexp_list out_chan lst;
-     output_char out_chan ')')
+  | SString str -> Printf.fprintf out_chan "(%s)" str
+  | SList lst -> Printf.fprintf out_chan "(%a)" write_sexp_list lst
 
 and write_sexp_list out_chan = function
   | [] -> ()
   | [e] -> write_sexp out_chan e
   | e :: es ->
-    (write_sexp out_chan e;
-      output_char out_chan ' ';
-      write_sexp_list out_chan es)
+    Printf.fprintf out_chan "%a " write_sexp e;
+    write_sexp_list out_chan es
 
-let write (solver : solver) (e : sexp) : unit =
-  write_sexp solver.stdin e;
-  output_char solver.stdin '\n';
-  flush solver.stdin
+let write solver e =
+  Printf.fprintf solver.stdin "%a\n%!" write_sexp e
 
 let read (solver : solver) : sexp =
   Smtlib_parser.sexp Smtlib_lexer.token solver.stdout_lexbuf
@@ -53,23 +44,23 @@ let print_success_command =
    FDs when the solvers exit *)
 let _solvers : (int * solver) list ref = ref []
 
-let handle_sigchild (_ : int) : unit =
-  if List.length !_solvers = 0
-  then Unix.waitpid [] (-1) |> ignore
-  else
-    begin
-      let (pid, _) = Unix.waitpid [] (-1) in
-      Printf.eprintf "solver child (pid %d) exited\n%!" pid;
-      try
-        let solver = List.assoc pid !_solvers in
-        close_in_noerr solver.stdout;
-        close_out_noerr solver.stdin;
-        _solvers := List.remove_assoc pid !_solvers
-      with
-        _ -> ()
-    end
-
 let () =
+  let handle_sigchild _ =
+    if List.length !_solvers = 0
+    then Unix.waitpid [] (-1) |> ignore
+    else
+      begin
+        let (pid, _) = Unix.waitpid [] (-1) in
+        Printf.eprintf "solver child (pid %d) exited\n%!" pid;
+        try
+          let solver = List.assoc pid !_solvers in
+          close_in_noerr solver.stdout;
+          close_out_noerr solver.stdin;
+          _solvers := List.remove_assoc pid !_solvers
+        with
+          _ -> ()
+      end
+  in
   Sys.set_signal Sys.sigchld (Sys.Signal_handle handle_sigchild)
 
 let make_solver (z3_path : string) : solver =
@@ -98,7 +89,7 @@ let make_solver (z3_path : string) : solver =
       | SSymbol "success" -> solver
       | _ -> smtlib_error "could not configure solver to :print-success"
   with
-    Sys_error msg -> smtlib_error ("couldn't talk to solver, double-check path (" ^ msg ^ ")")
+    Sys_error msg -> smtlib_error ("couldn't talk to solver: " ^ msg)
 
 let sexp_to_string (sexp : sexp) : string =
   let open Buffer in
