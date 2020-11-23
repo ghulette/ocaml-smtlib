@@ -25,6 +25,6 @@ build: [
 
 depends: [
   "dune" {>= "1.10"}
-  "ocaml" {>= "4.02.3"}
+  "ocaml" {>= "4.10.0"}
   "base-unix"
 ]
