@@ -35,13 +35,15 @@ module Sexp = struct
     Smtlib_parser.sexp Smtlib_lexer.token lex
 end
 
+type ('inp,'outp) command = ('inp -> Sexp.t) * (Sexp.t -> 'outp)
+
 module Solver : sig
   type t
   val z3 : ?path:string -> unit -> t
   val read : t -> Sexp.t
   val write : t -> Sexp.t -> unit
-  val command : t -> Sexp.t -> Sexp.t
-  val silent_command : t -> Sexp.t -> unit
+  val command : t -> ('a,'b) command -> 'a -> 'b
+  val silent_command : t -> ('a,unit) command -> 'a -> unit
 end = struct
   type t = {
     stdin : out_channel;
@@ -52,16 +54,24 @@ end = struct
 
   let write solver sexp = Sexp.to_channel solver.stdin sexp
 
-  let command solver sexp =
-    write solver sexp;
-    read solver
+  let command solver (inp,outp) x =
+    let in_sexp = inp x in
+    write solver in_sexp;
+    let out_sexp = read solver in
+    outp out_sexp
 
-  let silent_command solver sexp =
-    write solver sexp
+  let silent_command solver (inp,_) x =
+    let in_sexp = inp x in
+    write solver in_sexp
 
   let print_success_command =
     let open Sexp in
-    SList [SSymbol "set-option"; SKeyword ":print-success"; SSymbol "true"]
+    let inp () = SList [SSymbol "set-option"; SKeyword ":print-success"; SSymbol "true"] in
+    let outp = function
+      | SSymbol "success" -> ()
+      | _ -> smtlib_error "could not configure solver to :print-success"
+    in
+    (inp,outp)
 
   (* keep track of all solvers we spawn, so we can close our read/write
     FDs when the solvers exit *)
@@ -107,9 +117,8 @@ end = struct
     } in
     _solvers := (pid, solver) :: !_solvers;
     try
-      match command solver print_success_command with
-        | SSymbol "success" -> solver
-        | _ -> smtlib_error "could not configure solver to :print-success"
+      command solver print_success_command ();
+      solver
     with
       Sys_error msg -> smtlib_error ("couldn't talk to solver: " ^ msg)
 end
@@ -218,29 +227,43 @@ let rec sexp_to_term =
     App (Id f, ts)
   | sexp -> smtlib_error ("unparseable term " ^ sexp_to_string sexp)
 
-let expect_success solver sexp =
-  match Solver.command solver sexp with
-  | SSymbol "success" -> ()
-  | SList [SSymbol "error"; SString x] -> smtlib_error x
-  | sexp -> smtlib_error ("expected either success or error from solver, got " ^
-                     (sexp_to_string sexp))
+let expect_success inp : ('a,unit) command =
+  let open Sexp in
+  let outp = function
+    | SSymbol "success" -> ()
+    | SList [SSymbol "error"; SString x] -> smtlib_error x
+    | sexp -> smtlib_error ("expected either success or error from solver, got " ^
+                           (sexp_to_string sexp))
+  in (inp,outp)
+
+let declare_const_command =
+  expect_success
+    (fun (id,sort) -> SList [SSymbol "declare-const"; id_to_sexp id; sort_to_sexp sort])
 
 let declare_const solver id sort =
-  expect_success solver
-    (SList [SSymbol "declare-const"; id_to_sexp id; sort_to_sexp sort])
+  Solver.command solver declare_const_command (id,sort)
+
+let declare_fun_command =
+  expect_success
+    (fun (id,args,sort) -> SList ([SSymbol "declare-fun"; id_to_sexp id; SList (List.map sort_to_sexp args); sort_to_sexp sort]))
 
 let declare_fun solver id args sort =
-  expect_success solver
-    (SList ([SSymbol "declare-fun"; id_to_sexp id; SList (List.map (fun s -> sort_to_sexp s) args); sort_to_sexp sort]))
+  Solver.command solver declare_fun_command (id,args,sort)
+
+let declare_sort_command =
+  expect_success
+    (fun (id,arity) -> SList [SSymbol "declare-sort"; id_to_sexp id; SInt arity])
 
 let declare_sort solver id arity =
-  expect_success solver
-    (SList [SSymbol "declare-sort"; id_to_sexp id; SInt arity])
+  Solver.command solver declare_sort_command (id,arity)
+
+let assert_command =
+  expect_success (fun term -> SList [SSymbol "assert"; term_to_sexp term])
 
 let assert_ solver term =
-  expect_success solver (SList [SSymbol "assert"; term_to_sexp term])
+  Solver.command solver assert_command term
 
-let assert_soft solver ?weight:(weight = 1) ?id:(id = "") term =
+let assert_soft solver ?(weight = 1) ?(id = "") term =
   let open Sexp in
   let id_suffix = match id with
     | "" -> []
