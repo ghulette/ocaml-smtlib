@@ -2,15 +2,17 @@ exception Smtlib_error of string
 
 let smtlib_error msg = raise (Smtlib_error msg)
 
-module Sexp : sig
-  type t = Smtlib_syntax.sexp
-  val to_channel : out_channel -> t -> unit
-  val of_channel : in_channel -> t
-end = struct
-  type t = Smtlib_syntax.sexp
+module Sexp = struct
+  type t = Smtlib_syntax.sexp =
+    | SList of t list
+    | SSymbol of string
+    | SString of string
+    | SKeyword of string
+    | SInt of int
+    | SBitVec of int * int
+    | SBitVec64 of int64
 
-  let rec write ch =
-    let open Smtlib_syntax in function
+  let rec write ch = function
     | SInt n -> Printf.fprintf ch "%d" n
     | SBitVec (n, w) -> Printf.fprintf ch "(_ bv%d %d)" n w
     | SBitVec64 n -> Printf.fprintf ch "(_ bv%Ld 64)" n
@@ -58,7 +60,7 @@ end = struct
     write solver sexp
 
   let print_success_command =
-    let open Smtlib_syntax in
+    let open Sexp in
     SList [SSymbol "set-option"; SKeyword ":print-success"; SSymbol "true"]
 
   (* keep track of all solvers we spawn, so we can close our read/write
@@ -117,7 +119,7 @@ let sexp_to_string sexp =
   let open Buffer in
   let buf = create 100 in
   let rec to_string =
-    let open Smtlib_syntax in function
+    let open Sexp in function
     | SList alist -> add_char buf '('; list_to_string alist; add_char buf ')'
     | SSymbol x -> add_string buf x;
     | SKeyword x -> add_string buf x;
@@ -166,7 +168,7 @@ type tactic =
   | Then of tactic list
 
 let rec tactic_to_sexp =
-  let open Smtlib_syntax in function
+  let open Sexp in function
   | Simplify -> SSymbol "simplify"
   | SolveEQs -> SSymbol "solve-eqs"
   | BitBlast -> SSymbol "bit-blast"
@@ -182,7 +184,7 @@ let rec tactic_to_sexp =
   | Then ts ->
     SList ((SSymbol "then") :: List.map tactic_to_sexp ts)
 
-let id_to_sexp (Id x) = Smtlib_syntax.SSymbol x
+let id_to_sexp (Id x) = Sexp.SSymbol x
 
 let rec sort_to_sexp = function
   | Sort x -> id_to_sexp x
@@ -191,7 +193,7 @@ let rec sort_to_sexp = function
   | BitVecSort n -> SList [SSymbol "_"; SSymbol "BitVec"; SInt n]
 
 let rec term_to_sexp =
-  let open Smtlib_syntax in function
+  let open Sexp in function
   | String s -> SString s
   | Int n -> SInt n
   | BitVec (n, w) -> SBitVec (n, w)
@@ -204,7 +206,7 @@ let rec term_to_sexp =
            term_to_sexp t2]
 
 let rec sexp_to_term =
-  let open Smtlib_syntax in function
+  let open Sexp in function
   | SString s -> String s
   | SInt n -> Int n
   | SBitVec (n, w) -> BitVec (n, w)
@@ -239,7 +241,7 @@ let assert_ solver term =
   expect_success solver (SList [SSymbol "assert"; term_to_sexp term])
 
 let assert_soft solver ?weight:(weight = 1) ?id:(id = "") term =
-  let open Smtlib_syntax in
+  let open Sexp in
   let id_suffix = match id with
     | "" -> []
     | _ -> [SKeyword ":id"; SSymbol id] in
@@ -277,7 +279,7 @@ let check_sat solver =
   read_sat @@ Solver.command solver (SList [SSymbol "check-sat"])
 
 let check_sat_using tactic solver =
-  let open Smtlib_syntax in
+  let open Sexp in
   let fail sexp = smtlib_error ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
     let match_map () = match Solver.read solver with
@@ -301,17 +303,17 @@ let sexp_error expected sexp =
 type sorted_var = identifier * sort
 
 let sexp_to_sort =
-  let open Smtlib_syntax in function
+  let open Sexp in function
   | SSymbol t -> Sort (Id t)
   | sexp -> sexp_error "sort" sexp
 
 let sexp_to_sorted_var =
-  let open Smtlib_syntax in function
+  let open Sexp in function
   | SList [SSymbol x; sexp] -> Id x, sexp_to_sort sexp
   | sexp -> sexp_error "sorted var" sexp
 
 let sexp_to_model_val =
-  let open Smtlib_syntax in function
+  let open Sexp in function
   | SList [SSymbol "define-fun"; SSymbol x; SList args; s; sexp] ->
     let mv_sort = sexp_to_sort s in
     let mv_term = sexp_to_term sexp in
@@ -320,14 +322,14 @@ let sexp_to_model_val =
   | sexp -> sexp_error "model val" sexp
 
 let get_model solver =
-  let open Smtlib_syntax in
+  let open Sexp in
   let cmd = SList [SSymbol "get-model"] in
   match Solver.command solver cmd with
   | SList (SSymbol "model" :: sexps) -> List.map sexp_to_model_val sexps
   | sexp -> sexp_error "model" sexp
 
 let get_value solver e =
-  let open Smtlib_syntax in
+  let open Sexp in
   let cmd = SList [SSymbol "get-value"; SList [term_to_sexp e]] in
   match Solver.command solver cmd with
   | SList [SList [_; x]] -> sexp_to_term x

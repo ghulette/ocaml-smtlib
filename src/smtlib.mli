@@ -1,7 +1,14 @@
 (** An OCaml API for working with SMT-LIB-based solvers, such as Z3. *)
 
 module Sexp : sig
-  type t = Smtlib_syntax.sexp
+  type t =
+    | SList of t list
+    | SSymbol of string
+    | SString of string
+    | SKeyword of string
+    | SInt of int
+    | SBitVec of int * int
+    | SBitVec64 of int64
   val to_channel : out_channel -> t -> unit
   val of_channel : in_channel -> t
 end
