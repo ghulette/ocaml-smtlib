@@ -15,13 +15,15 @@ end
 
 (** {1 Starting solvers.} *)
 
+type ('a,'b) command
+
 module Solver : sig
   type t
   val z3 : ?path:string -> unit -> t
   val read : t -> Sexp.t
   val write : t -> Sexp.t -> unit
-  val command : t -> Sexp.t -> Sexp.t
-  val silent_command : t -> Sexp.t -> unit
+  val command : t -> ('a,'b) command -> 'a -> 'b
+  val silent_command : t -> ('a, unit) command -> 'a -> unit
 end
 
 (** A handle to a Z3 process. *)
@@ -90,7 +92,7 @@ val declare_sort : Solver.t -> identifier -> int -> unit
 val assert_ : Solver.t -> term -> unit
 
 (** [assert_soft solver term ?~weight ?~id] runs the command [(assert-soft term :weight ~weight :id ~id] *)
-val assert_soft : Solver.t -> ?weight:int -> ?id:string -> term -> unit
+val assert_soft : Solver.t -> ?weight:int -> ?id:identifier -> term -> unit
 
 (** [maximize solver e] runs the command [(maximize e)] *)
 val maximize : Solver.t -> term -> unit
@@ -99,7 +101,7 @@ val maximize : Solver.t -> term -> unit
 val minimize : Solver.t -> term -> unit
 
 (** [read_objectives solver] reads output of objective function printed after calls to [check_sat solver]  *)
-val read_objectives : Solver.t -> unit
+val get_objectives : Solver.t -> unit
 
 (** [check_sat solver] runs the command [(check-sat)] *)
 val check_sat : Solver.t -> check_sat_result

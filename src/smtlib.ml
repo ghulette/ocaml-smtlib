@@ -236,6 +236,10 @@ let expect_success inp : ('a,unit) command =
                            (sexp_to_string sexp))
   in (inp,outp)
 
+let silent inp : ('a,unit) command =
+  let outp = fun _ -> () in
+  (inp,outp)
+
 let declare_const_command =
   expect_success
     (fun (id,sort) -> SList [SSymbol "declare-const"; id_to_sexp id; sort_to_sexp sort])
@@ -263,62 +267,65 @@ let assert_command =
 let assert_ solver term =
   Solver.command solver assert_command term
 
-let assert_soft solver ?(weight = 1) ?(id = "") term =
+let assert_soft_command =
   let open Sexp in
-  let id_suffix = match id with
-    | "" -> []
-    | _ -> [SKeyword ":id"; SSymbol id] in
-  let sexp =
-    (SList ([SSymbol "assert-soft"; term_to_sexp term; SKeyword ":weight"; SInt weight] @ id_suffix)) in
-  Solver.silent_command solver sexp
+  let inp (weight,id_opt,term) =
+    let id_suf =
+      match id_opt with
+      | None -> []
+      | Some (Id x) -> [SKeyword ":id"; SSymbol x]
+    in
+    SList ([SSymbol "assert-soft"; term_to_sexp term; SKeyword ":weight"; SInt weight] @ id_suf)
+  in
+  silent inp
+
+let assert_soft solver ?(weight = 1) ?id term =
+  Solver.silent_command solver assert_soft_command (weight,id,term)
+
+let maximize_command =
+  silent (fun term -> SList ([SSymbol "maximize"; term_to_sexp term]))
 
 let maximize solver term =
-  Solver.silent_command solver (SList ([SSymbol "maximize"; term_to_sexp term]))
+  Solver.silent_command solver maximize_command term
+
+let minimize_command =
+  silent (fun term -> SList ([SSymbol "minimize"; term_to_sexp term]))
 
 let minimize solver term =
-  Solver.silent_command solver (SList ([SSymbol "minimize"; term_to_sexp term]))
+  Solver.silent_command solver minimize_command term
 
-let read_objectives solver =
-  match Solver.read solver with
-  | SList [SSymbol "objectives"; SList _] -> ()
-  | s -> smtlib_error ("unexpected result in optimized objective, got " ^ sexp_to_string s)
+let get_objectives_command =
+  let open Sexp in
+  let inp () = SList [SSymbol "get-objectives"] in
+  let outp = function
+    | SList [SSymbol "objectives"; SList _] -> ()
+    | s -> smtlib_error ("unexpected result in optimized objective, got " ^ sexp_to_string s)
+  in
+  (inp,outp)
+
+let get_objectives solver =
+  Solver.command solver get_objectives_command ()
+
+let sat_result_of_sexp =
+  let open Sexp in function
+  | SSymbol "sat" -> Sat
+  | SSymbol "unsat" -> Unsat
+  | SSymbol "unknown" -> Unknown
+  | sexp -> smtlib_error ("unexpected result from (check-sat), got " ^ sexp_to_string sexp)
+
+let check_sat_command =
+  let inp () = Sexp.(SList [SSymbol "check-sat"]) in
+  (inp,sat_result_of_sexp)
 
 let check_sat solver =
-  let fail sexp  = smtlib_error ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
-  let rec read_sat sexp =
-    let match_map () = match Solver.read solver with
-      | SInt _ -> read_sat @@ Solver.read solver
-      | sexp -> fail sexp
-    in
-    match sexp with
-    | SSymbol "sat" -> Sat
-    | SSymbol "unsat" -> Unsat
-    | SSymbol "unknown" -> Unknown
-    | SSymbol "|->" -> match_map ()
-    | SSymbol _ -> read_sat @@ Solver.read solver
-    | SList _ -> read_sat @@ Solver.read solver
-    | sexp -> fail sexp
-  in
-  read_sat @@ Solver.command solver (SList [SSymbol "check-sat"])
+  Solver.command solver check_sat_command ()
+
+let check_sat_using_command =
+  let inp tactic = Sexp.(SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
+  (inp, sat_result_of_sexp)
 
 let check_sat_using tactic solver =
-  let open Sexp in
-  let fail sexp = smtlib_error ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
-  let rec read_sat sexp =
-    let match_map () = match Solver.read solver with
-      | SInt _ -> read_sat @@ Solver.read solver
-      | sexp -> fail sexp in
-    match sexp with
-    | SSymbol "sat" -> Sat
-    | SSymbol "unsat" -> Unsat
-    | SSymbol "unknown" -> Unknown
-    | SSymbol "|->" -> match_map ()
-    | SSymbol _ -> read_sat @@ Solver.read solver
-    | SList _ -> read_sat @@ Solver.read solver
-    | sexp -> fail sexp
-  in
-  let cmd = (SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
-  read_sat @@ Solver.command solver cmd
+  Solver.command solver check_sat_using_command tactic
 
 let sexp_error expected sexp =
   smtlib_error ("expected " ^ expected ^ ", but got " ^ sexp_to_string sexp)
@@ -344,22 +351,41 @@ let sexp_to_model_val =
     Id x, mv_sort, mv_args, mv_term
   | sexp -> sexp_error "model val" sexp
 
+let get_model_command =
+  let open Sexp in
+  let inp () = SList [SSymbol "get-model"] in
+  let outp = function
+    | SList (SSymbol "model" :: sexps) -> List.map sexp_to_model_val sexps
+    | sexp -> sexp_error "model" sexp
+  in
+  (inp,outp)
+
 let get_model solver =
-  let open Sexp in
-  let cmd = SList [SSymbol "get-model"] in
-  match Solver.command solver cmd with
-  | SList (SSymbol "model" :: sexps) -> List.map sexp_to_model_val sexps
-  | sexp -> sexp_error "model" sexp
+  Solver.command solver get_model_command ()
 
-let get_value solver e =
+let get_value_command =
   let open Sexp in
-  let cmd = SList [SSymbol "get-value"; SList [term_to_sexp e]] in
-  match Solver.command solver cmd with
-  | SList [SList [_; x]] -> sexp_to_term x
-  | sexp -> sexp_error "a single pair" sexp
+  let inp term = SList [SSymbol "get-value"; SList [term_to_sexp term]] in
+  let outp = function
+    | SList [SList [_; x]] -> sexp_to_term x
+    | sexp -> sexp_error "a single pair" sexp
+  in
+  (inp,outp)
 
-let push solver = expect_success solver (SList [SSymbol "push"])
-let pop solver = expect_success solver (SList [SSymbol "pop"])
+let get_value solver term =
+  Solver.command solver get_value_command term
+
+let push_command =
+  expect_success (fun () -> Sexp.(SList [SSymbol "push"]))
+
+let push solver =
+  Solver.command solver push_command ()
+
+let pop_command =
+  expect_success (fun () -> Sexp.(SList [SSymbol "pop"]))
+
+let pop solver =
+  Solver.command solver pop_command ()
 
 let int_sort  = Sort (Id "Int")
 
