@@ -4,38 +4,50 @@ exception Smtlib_error of string
 
 let smtlib_error msg = raise (Smtlib_error msg)
 
+module Sexp : sig
+  type t = Smtlib_syntax.sexp
+  val to_channel : out_channel -> t -> unit
+  val of_channel : in_channel -> t
+end = struct
+  type t = Smtlib_syntax.sexp
+
+  let rec write ch = function
+    | SInt n -> Printf.fprintf ch "%d" n
+    | SBitVec (n, w) -> Printf.fprintf ch "(_ bv%d %d)" n w
+    | SBitVec64 n -> Printf.fprintf ch "(_ bv%Ld 64)" n
+    | SSymbol str -> output_string ch str
+    | SKeyword str -> output_string ch str
+    | SString str -> Printf.fprintf ch "(%s)" str
+    | SList lst -> Printf.fprintf ch "(%a)" write_list lst
+
+  and write_list out_chan = function
+    | [] -> ()
+    | [e] -> write out_chan e
+    | e :: es ->
+      Printf.fprintf out_chan "%a " write e;
+      write_list out_chan es
+
+  let to_channel ch sexp = Printf.fprintf ch "%a\n%!" write sexp
+
+  let of_channel ch =
+    let lex = Lexing.from_channel ch in
+    Smtlib_parser.sexp Smtlib_lexer.token lex
+end
+
 type solver = {
   stdin : out_channel;
   stdout : in_channel;
-  stdout_lexbuf : Lexing.lexbuf
 }
 
-(* Does not flush *)
-let rec write_sexp out_chan = function
-  | SInt n -> Printf.fprintf out_chan "%d" n
-  | SBitVec (n, w) -> Printf.fprintf out_chan "(_ bv%d %d)" n w
-  | SBitVec64 n -> Printf.fprintf out_chan "(_ bv%Ld 64)" n
-  | SSymbol str -> output_string out_chan str
-  | SKeyword str -> output_string out_chan str
-  | SString str -> Printf.fprintf out_chan "(%s)" str
-  | SList lst -> Printf.fprintf out_chan "(%a)" write_sexp_list lst
+let read_solver solver = Sexp.of_channel solver.stdout
+let write_solver solver sexp = Sexp.to_channel solver.stdin sexp
 
-and write_sexp_list out_chan = function
-  | [] -> ()
-  | [e] -> write_sexp out_chan e
-  | e :: es ->
-    Printf.fprintf out_chan "%a " write_sexp e;
-    write_sexp_list out_chan es
+let command solver sexp =
+  write_solver solver sexp;
+  read_solver solver
 
-let write solver e =
-  Printf.fprintf solver.stdin "%a\n%!" write_sexp e
-
-let read (solver : solver) : sexp =
-  Smtlib_parser.sexp Smtlib_lexer.token solver.stdout_lexbuf
-
-let command (solver : solver) (sexp : sexp) = write solver sexp; read solver
-
-let silent_command (solver : solver) (sexp : sexp) = write solver sexp
+let silent_command solver sexp =
+  write_solver solver sexp
 
 let print_success_command =
   SList [SSymbol "set-option"; SKeyword ":print-success"; SSymbol "true"]
@@ -80,8 +92,7 @@ let make_solver (z3_path : string) : solver =
   set_binary_mode_in in_chan false;
   let solver = {
     stdin = out_chan;
-    stdout = in_chan;
-    stdout_lexbuf = Lexing.from_channel in_chan
+    stdout = in_chan
   } in
   _solvers := (pid, solver) :: !_solvers;
   try
@@ -227,15 +238,15 @@ let minimize (solver : solver) (term : term) : unit =
   silent_command solver (SList ([SSymbol "minimize"; term_to_sexp term]))
 
 let read_objectives (solver : solver) : unit =
-  match read solver with
+  match read_solver solver with
   | SList [SSymbol "objectives"; SList _] -> ()
   | s -> smtlib_error ("unexpected result in optimized objective, got " ^ sexp_to_string s)
 
 let check_sat (solver : solver) : check_sat_result =
   let fail sexp  = smtlib_error ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
-    let match_map () = match read solver with
-      | SInt _ -> read_sat @@ read solver
+    let match_map () = match read_solver solver with
+      | SInt _ -> read_sat @@ read_solver solver
       | sexp -> fail sexp
     in
     match sexp with
@@ -243,8 +254,8 @@ let check_sat (solver : solver) : check_sat_result =
     | SSymbol "unsat" -> Unsat
     | SSymbol "unknown" -> Unknown
     | SSymbol "|->" -> match_map ()
-    | SSymbol _ -> read_sat @@ read solver
-    | SList _ -> read_sat @@ read solver
+    | SSymbol _ -> read_sat @@ read_solver solver
+    | SList _ -> read_sat @@ read_solver solver
     | sexp -> fail sexp
   in
   read_sat @@ command solver (SList [SSymbol "check-sat"])
@@ -252,16 +263,16 @@ let check_sat (solver : solver) : check_sat_result =
 let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
   let fail sexp = smtlib_error ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
-    let match_map () = match read solver with
-      | SInt _ -> read_sat @@ read solver
+    let match_map () = match read_solver solver with
+      | SInt _ -> read_sat @@ read_solver solver
       | sexp -> fail sexp in
     match sexp with
     | SSymbol "sat" -> Sat
     | SSymbol "unsat" -> Unsat
     | SSymbol "unknown" -> Unknown
     | SSymbol "|->" -> match_map ()
-    | SSymbol _ -> read_sat @@ read solver
-    | SList _ -> read_sat @@ read solver
+    | SSymbol _ -> read_sat @@ read_solver solver
+    | SList _ -> read_sat @@ read_solver solver
     | sexp -> fail sexp
   in
   let cmd = (SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
