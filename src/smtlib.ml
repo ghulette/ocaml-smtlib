@@ -34,73 +34,84 @@ end = struct
     Smtlib_parser.sexp Smtlib_lexer.token lex
 end
 
-type solver = {
-  stdin : out_channel;
-  stdout : in_channel;
-}
+module Solver : sig
+  type t
+  val z3 : ?path:string -> unit -> t
+  val read : t -> sexp
+  val write : t -> sexp -> unit
+  val command : t -> sexp -> sexp
+  val silent_command : t -> sexp -> unit
+end = struct
+  type t = {
+    stdin : out_channel;
+    stdout : in_channel;
+  }
 
-let read_solver solver = Sexp.of_channel solver.stdout
-let write_solver solver sexp = Sexp.to_channel solver.stdin sexp
+  let read solver = Sexp.of_channel solver.stdout
 
-let command solver sexp =
-  write_solver solver sexp;
-  read_solver solver
+  let write solver sexp = Sexp.to_channel solver.stdin sexp
 
-let silent_command solver sexp =
-  write_solver solver sexp
+  let command solver sexp =
+    write solver sexp;
+    read solver
 
-let print_success_command =
-  SList [SSymbol "set-option"; SKeyword ":print-success"; SSymbol "true"]
+  let silent_command solver sexp =
+    write solver sexp
 
-(* keep track of all solvers we spawn, so we can close our read/write
-   FDs when the solvers exit *)
-let _solvers : (int * solver) list ref = ref []
+  let print_success_command =
+    SList [SSymbol "set-option"; SKeyword ":print-success"; SSymbol "true"]
 
-let () =
-  let handle_sigchild _ =
-    if List.length !_solvers = 0
-    then Unix.waitpid [] (-1) |> ignore
-    else
-      begin
-        let (pid, _) = Unix.waitpid [] (-1) in
-        Printf.eprintf "solver child (pid %d) exited\n%!" pid;
-        try
-          let solver = List.assoc pid !_solvers in
-          close_in_noerr solver.stdout;
-          close_out_noerr solver.stdin;
-          _solvers := List.remove_assoc pid !_solvers
-        with
-          _ -> ()
-      end
-  in
-  Sys.set_signal Sys.sigchld (Sys.Signal_handle handle_sigchild)
+  (* keep track of all solvers we spawn, so we can close our read/write
+    FDs when the solvers exit *)
+  let _solvers : (int * t) list ref = ref []
 
-let make_solver (z3_path : string) : solver =
-  let open Unix in
-  let (z3_stdin, z3_stdin_writer) = pipe () in
-  let (z3_stdout_reader, z3_stdout) = pipe () in
-  (* If the ocaml ends of the pipes aren't marked close-on-exec, they
-     will remain open in the fork/exec'd z3 process, and z3 won't exit
-     when our main ocaml process ends. *)
-  set_close_on_exec z3_stdin_writer;
-  set_close_on_exec z3_stdout_reader;
-  let pid = create_process z3_path [| z3_path; "-in"; "-smt2" |]
-    z3_stdin z3_stdout stderr in
-  let in_chan = in_channel_of_descr z3_stdout_reader in
-  let out_chan = out_channel_of_descr z3_stdin_writer in
-  set_binary_mode_out out_chan false;
-  set_binary_mode_in in_chan false;
-  let solver = {
-    stdin = out_chan;
-    stdout = in_chan
-  } in
-  _solvers := (pid, solver) :: !_solvers;
-  try
-    match command solver print_success_command with
-      | SSymbol "success" -> solver
-      | _ -> smtlib_error "could not configure solver to :print-success"
-  with
-    Sys_error msg -> smtlib_error ("couldn't talk to solver: " ^ msg)
+  let () =
+    let handle_sigchild _ =
+      if List.length !_solvers = 0
+      then Unix.waitpid [] (-1) |> ignore
+      else
+        begin
+          let (pid, _) = Unix.waitpid [] (-1) in
+          Printf.eprintf "solver child (pid %d) exited\n%!" pid;
+          try
+            let solver = List.assoc pid !_solvers in
+            close_in_noerr solver.stdout;
+            close_out_noerr solver.stdin;
+            _solvers := List.remove_assoc pid !_solvers
+          with
+            _ -> ()
+        end
+    in
+    Sys.set_signal Sys.sigchld (Sys.Signal_handle handle_sigchild)
+
+  let z3 ?(path="z3") () =
+    let open Unix in
+    let (z3_stdin, z3_stdin_writer) = pipe () in
+    let (z3_stdout_reader, z3_stdout) = pipe () in
+    (* If the ocaml ends of the pipes aren't marked close-on-exec, they
+      will remain open in the fork/exec'd z3 process, and z3 won't exit
+      when our main ocaml process ends. *)
+    set_close_on_exec z3_stdin_writer;
+    set_close_on_exec z3_stdout_reader;
+    let pid = create_process path [| path; "-in"; "-smt2" |]
+      z3_stdin z3_stdout stderr in
+    let in_chan = in_channel_of_descr z3_stdout_reader in
+    let out_chan = out_channel_of_descr z3_stdin_writer in
+    set_binary_mode_out out_chan false;
+    set_binary_mode_in in_chan false;
+    let solver = {
+      stdin = out_chan;
+      stdout = in_chan
+    } in
+    _solvers := (pid, solver) :: !_solvers;
+    try
+      match command solver print_success_command with
+        | SSymbol "success" -> solver
+        | _ -> smtlib_error "could not configure solver to :print-success"
+    with
+      Sys_error msg -> smtlib_error ("couldn't talk to solver: " ^ msg)
+end
+
 
 let sexp_to_string (sexp : sexp) : string =
   let open Buffer in
@@ -201,52 +212,52 @@ let rec sexp_to_term = function
     App (Id f, ts)
   | sexp -> smtlib_error ("unparseable term " ^ sexp_to_string sexp)
 
-let expect_success (solver : solver) (sexp : sexp) : unit =
-  match command solver sexp with
+let expect_success solver sexp =
+  match Solver.command solver sexp with
   | SSymbol "success" -> ()
   | SList [SSymbol "error"; SString x] -> smtlib_error x
   | sexp -> smtlib_error ("expected either success or error from solver, got " ^
                      (sexp_to_string sexp))
 
-let declare_const (solver : solver) (id : identifier) (sort : sort) : unit =
+let declare_const solver id sort =
   expect_success solver
     (SList [SSymbol "declare-const"; id_to_sexp id; sort_to_sexp sort])
 
-let declare_fun (solver : solver) (id : identifier) (args : sort list) (sort : sort) : unit =
+let declare_fun solver id args sort =
   expect_success solver
     (SList ([SSymbol "declare-fun"; id_to_sexp id; SList (List.map (fun s -> sort_to_sexp s) args); sort_to_sexp sort]))
 
-let declare_sort (solver : solver) (id : identifier) (arity : int) : unit =
+let declare_sort solver id arity =
   expect_success solver
     (SList [SSymbol "declare-sort"; id_to_sexp id; SInt arity])
 
-let assert_ (solver : solver) (term : term) : unit =
+let assert_ solver term =
   expect_success solver (SList [SSymbol "assert"; term_to_sexp term])
 
-let assert_soft (solver : solver) ?weight:(weight = 1) ?id:(id = "") (term : term) : unit =
+let assert_soft solver ?weight:(weight = 1) ?id:(id = "") term =
   let id_suffix = match id with
     | "" -> []
     | _ -> [SKeyword ":id"; SSymbol id] in
   let sexp =
     (SList ([SSymbol "assert-soft"; term_to_sexp term; SKeyword ":weight"; SInt weight] @ id_suffix)) in
-  silent_command solver sexp
+  Solver.silent_command solver sexp
 
-let maximize (solver : solver) (term : term) : unit =
-  silent_command solver (SList ([SSymbol "maximize"; term_to_sexp term]))
+let maximize solver term =
+  Solver.silent_command solver (SList ([SSymbol "maximize"; term_to_sexp term]))
 
-let minimize (solver : solver) (term : term) : unit =
-  silent_command solver (SList ([SSymbol "minimize"; term_to_sexp term]))
+let minimize solver term =
+  Solver.silent_command solver (SList ([SSymbol "minimize"; term_to_sexp term]))
 
-let read_objectives (solver : solver) : unit =
-  match read_solver solver with
+let read_objectives solver =
+  match Solver.read solver with
   | SList [SSymbol "objectives"; SList _] -> ()
   | s -> smtlib_error ("unexpected result in optimized objective, got " ^ sexp_to_string s)
 
-let check_sat (solver : solver) : check_sat_result =
+let check_sat solver =
   let fail sexp  = smtlib_error ("unexpected result from (check-sat), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
-    let match_map () = match read_solver solver with
-      | SInt _ -> read_sat @@ read_solver solver
+    let match_map () = match Solver.read solver with
+      | SInt _ -> read_sat @@ Solver.read solver
       | sexp -> fail sexp
     in
     match sexp with
@@ -254,29 +265,29 @@ let check_sat (solver : solver) : check_sat_result =
     | SSymbol "unsat" -> Unsat
     | SSymbol "unknown" -> Unknown
     | SSymbol "|->" -> match_map ()
-    | SSymbol _ -> read_sat @@ read_solver solver
-    | SList _ -> read_sat @@ read_solver solver
+    | SSymbol _ -> read_sat @@ Solver.read solver
+    | SList _ -> read_sat @@ Solver.read solver
     | sexp -> fail sexp
   in
-  read_sat @@ command solver (SList [SSymbol "check-sat"])
+  read_sat @@ Solver.command solver (SList [SSymbol "check-sat"])
 
-let check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
+let check_sat_using tactic solver =
   let fail sexp = smtlib_error ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
   let rec read_sat sexp =
-    let match_map () = match read_solver solver with
-      | SInt _ -> read_sat @@ read_solver solver
+    let match_map () = match Solver.read solver with
+      | SInt _ -> read_sat @@ Solver.read solver
       | sexp -> fail sexp in
     match sexp with
     | SSymbol "sat" -> Sat
     | SSymbol "unsat" -> Unsat
     | SSymbol "unknown" -> Unknown
     | SSymbol "|->" -> match_map ()
-    | SSymbol _ -> read_sat @@ read_solver solver
-    | SList _ -> read_sat @@ read_solver solver
+    | SSymbol _ -> read_sat @@ Solver.read solver
+    | SList _ -> read_sat @@ Solver.read solver
     | sexp -> fail sexp
   in
   let cmd = (SList [SSymbol "check-sat-using"; tactic_to_sexp tactic]) in
-  read_sat @@ command solver cmd
+  read_sat @@ Solver.command solver cmd
 
 let sexp_error expected sexp =
   smtlib_error ("expected " ^ expected ^ ", but got " ^ sexp_to_string sexp)
@@ -301,18 +312,18 @@ let sexp_to_model_val = function
 
 let get_model solver =
   let cmd = SList [SSymbol "get-model"] in
-  match command solver cmd with
+  match Solver.command solver cmd with
   | SList (SSymbol "model" :: sexps) -> List.map sexp_to_model_val sexps
   | sexp -> sexp_error "model" sexp
 
-let get_value (solver : solver) (e : term) : term =
+let get_value solver e =
   let cmd = SList [SSymbol "get-value"; SList [term_to_sexp e]] in
-  match command solver cmd with
+  match Solver.command solver cmd with
   | SList [SList [_; x]] -> sexp_to_term x
   | sexp -> sexp_error "a single pair" sexp
 
-let push (solver : solver) = expect_success solver (SList [SSymbol "push"])
-let pop (solver : solver) = expect_success solver (SList [SSymbol "pop"])
+let push solver = expect_success solver (SList [SSymbol "push"])
+let pop solver = expect_success solver (SList [SSymbol "pop"])
 
 let int_sort  = Sort (Id "Int")
 

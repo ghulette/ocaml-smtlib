@@ -24,7 +24,7 @@ let print_result_sat model =
   List.iter (fun mv -> printf "%s\n" (model_value_to_string mv)) model
 
 let run_test fn =
-  let solv = make_solver "z3" in
+  let solv = Solver.z3 () in
   fn solv;
   match check_sat solv with
   | Sat -> get_model solv |> print_result_sat
