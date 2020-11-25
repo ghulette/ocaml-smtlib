@@ -4,12 +4,6 @@
 
 type ('inp,'outp) command = ('inp -> Sexp.t) * (Sexp.t -> 'outp)
 
-module Solver : sig
-  type t
-  val z3 : ?path:string -> unit -> t
-  val command : t -> ('a,'b) command -> 'a -> 'b
-end
-
 (** A handle to a Z3 process. *)
 
 (** [make_solver path] produces a handle to a Z3 process.
