@@ -1,6 +1,6 @@
 {
   open Lexing
-  open Smtlib_parser
+  open Sexp_parser
 
   let parse_hex (str : string) : (int * int) =
     let len = (String.length str) - 2 in

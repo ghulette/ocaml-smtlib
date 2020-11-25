@@ -2,40 +2,7 @@ exception Smtlib_error of string
 
 let smtlib_error msg = raise (Smtlib_error msg)
 
-module Sexp = struct
-  type t = Smtlib_syntax.sexp =
-    | SList of t list
-    | SSymbol of string
-    | SString of string
-    | SKeyword of string
-    | SInt of int
-    | SBitVec of int * int
-    | SBitVec64 of int64
-
-  let rec write ch = function
-    | SInt n -> Printf.fprintf ch "%d" n
-    | SBitVec (n, w) -> Printf.fprintf ch "(_ bv%d %d)" n w
-    | SBitVec64 n -> Printf.fprintf ch "(_ bv%Ld 64)" n
-    | SSymbol str -> output_string ch str
-    | SKeyword str -> output_string ch str
-    | SString str -> Printf.fprintf ch "(%s)" str
-    | SList lst -> Printf.fprintf ch "(%a)" write_list lst
-
-  and write_list out_chan = function
-    | [] -> ()
-    | [e] -> write out_chan e
-    | e :: es ->
-      Printf.fprintf out_chan "%a " write e;
-      write_list out_chan es
-
-  let to_channel ch sexp = Printf.fprintf ch "%a\n%!" write sexp
-
-  let of_channel ch =
-    let lex = Lexing.from_channel ch in
-    Smtlib_parser.sexp Smtlib_lexer.token lex
-end
-
-type ('inp,'outp) command = ('inp -> Sexp.t) * (Sexp.t -> 'outp)
+type ('a,'b) command = ('a -> Sexp.t) * (Sexp.t -> 'b)
 
 module Solver : sig
   type t
@@ -47,7 +14,7 @@ end = struct
     stdout : in_channel;
   }
 
-  let read solver = Sexp.of_channel solver.stdout
+  let read solver = Sexp.from_channel solver.stdout
 
   let write solver sexp = Sexp.to_channel solver.stdin sexp
 
