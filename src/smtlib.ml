@@ -40,10 +40,7 @@ type ('inp,'outp) command = ('inp -> Sexp.t) * (Sexp.t -> 'outp)
 module Solver : sig
   type t
   val z3 : ?path:string -> unit -> t
-  val read : t -> Sexp.t
-  val write : t -> Sexp.t -> unit
   val command : t -> ('a,'b) command -> 'a -> 'b
-  val silent_command : t -> ('a,unit) command -> 'a -> unit
 end = struct
   type t = {
     stdin : out_channel;
@@ -59,10 +56,6 @@ end = struct
     write solver in_sexp;
     let out_sexp = read solver in
     outp out_sexp
-
-  let silent_command solver (inp,_) x =
-    let in_sexp = inp x in
-    write solver in_sexp
 
   let print_success_command =
     let open Sexp in
@@ -236,10 +229,6 @@ let expect_success inp : ('a,unit) command =
                            (sexp_to_string sexp))
   in (inp,outp)
 
-let silent inp : ('a,unit) command =
-  let outp = fun _ -> () in
-  (inp,outp)
-
 let declare_const_command =
   expect_success
     (fun (id,sort) -> SList [SSymbol "declare-const"; id_to_sexp id; sort_to_sexp sort])
@@ -277,22 +266,22 @@ let assert_soft_command =
     in
     SList ([SSymbol "assert-soft"; term_to_sexp term; SKeyword ":weight"; SInt weight] @ id_suf)
   in
-  silent inp
+  expect_success inp
 
 let assert_soft solver ?(weight = 1) ?id term =
-  Solver.silent_command solver assert_soft_command (weight,id,term)
+  Solver.command solver assert_soft_command (weight,id,term)
 
 let maximize_command =
-  silent (fun term -> SList ([SSymbol "maximize"; term_to_sexp term]))
+  expect_success (fun term -> SList ([SSymbol "maximize"; term_to_sexp term]))
 
 let maximize solver term =
-  Solver.silent_command solver maximize_command term
+  Solver.command solver maximize_command term
 
 let minimize_command =
-  silent (fun term -> SList ([SSymbol "minimize"; term_to_sexp term]))
+  expect_success (fun term -> SList ([SSymbol "minimize"; term_to_sexp term]))
 
 let minimize solver term =
-  Solver.silent_command solver minimize_command term
+  Solver.command solver minimize_command term
 
 let get_objectives_command =
   let open Sexp in

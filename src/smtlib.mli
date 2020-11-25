@@ -15,15 +15,12 @@ end
 
 (** {1 Starting solvers.} *)
 
-type ('a,'b) command
+type ('inp,'outp) command = ('inp -> Sexp.t) * (Sexp.t -> 'outp)
 
 module Solver : sig
   type t
   val z3 : ?path:string -> unit -> t
-  val read : t -> Sexp.t
-  val write : t -> Sexp.t -> unit
   val command : t -> ('a,'b) command -> 'a -> 'b
-  val silent_command : t -> ('a, unit) command -> 'a -> unit
 end
 
 (** A handle to a Z3 process. *)
