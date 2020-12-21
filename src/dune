@@ -2,5 +2,5 @@
   (name smtlib)
   (public_name ocaml-smtlib)
   (libraries unix))
-(ocamlyacc smtlib_parser)
-(ocamllex smtlib_lexer)
+(ocamlyacc sexp_parser)
+(ocamllex sexp_lexer)

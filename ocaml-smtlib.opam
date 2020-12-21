@@ -8,12 +8,12 @@ dev-repo: "git+https://github.com/ghulette/ocaml-smtlib.git"
 license: "MIT"
 
 synopsis:
-  "A simple OCaml API for building/parsing SMTLIB2 expressions and interacting with some popular SMT solvers"
+  "A simple OCaml API for building/parsing SMTLIB2 expressions and interacting with SMT solvers"
 
 description: """
-A simple OCaml API for building/parsing SMTLIB2 expressions and interacting with some popular SMT solvers.
+A simple OCaml API for building/parsing SMTLIB2 expressions and interacting with SMT solvers.
 
-Based on ocaml-z3, with added support for additional SMT solvers.
+Based on [ocaml-z3](https://github.com/arjunguha/ocaml-z3).
 """
 
 build: [

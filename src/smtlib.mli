@@ -2,8 +2,15 @@
 
 (** {1 Starting solvers.} *)
 
+type ('inp,'outp) command = ('inp -> Sexp.t) * (Sexp.t -> 'outp)
+
+module Solver : sig
+  type t
+  val z3 : ?path:string -> unit -> t
+  val command : t -> ('a,'b) command -> 'a -> 'b
+end
+
 (** A handle to a Z3 process. *)
-type solver
 
 (** [make_solver path] produces a handle to a Z3 process.
 
@@ -11,7 +18,6 @@ type solver
   [PATH], this can just be ["z3"].
 
   This command starts Z3 with the flags [-in] and [-smt2]. *)
-val make_solver : string -> solver
 
 (** {1 High-level API.}
 
@@ -58,50 +64,50 @@ type check_sat_result =
   | Unknown
 
 (** [declare_const solver x sort] runs the command [(declare-const x sort)] *)
-val declare_const : solver -> identifier -> sort -> unit
+val declare_const : Solver.t -> identifier -> sort -> unit
 
 (** [declare_fun solver x sorts sort] runs the command [(declare-fun x sorts sort)] *)
-val declare_fun : solver -> identifier -> sort list -> sort -> unit
+val declare_fun : Solver.t -> identifier -> sort list -> sort -> unit
 
 (** [declare_sort solver x arity] runs the command [(declare-sort x arity)] *)
-val declare_sort : solver -> identifier -> int -> unit
+val declare_sort : Solver.t -> identifier -> int -> unit
 
 (** [assert_ solver term] runs the command [(assert term)] *)
-val assert_ : solver -> term -> unit
+val assert_ : Solver.t -> term -> unit
 
 (** [assert_soft solver term ?~weight ?~id] runs the command [(assert-soft term :weight ~weight :id ~id] *)
-val assert_soft : solver -> ?weight:int -> ?id:string -> term -> unit
+val assert_soft : Solver.t -> ?weight:int -> ?id:identifier -> term -> unit
 
 (** [maximize solver e] runs the command [(maximize e)] *)
-val maximize : solver -> term -> unit
+val maximize : Solver.t -> term -> unit
 
 (** [minimize solver e] runs the command [(minimize e)] *)
-val minimize : solver -> term -> unit
+val minimize : Solver.t -> term -> unit
 
 (** [read_objectives solver] reads output of objective function printed after calls to [check_sat solver]  *)
-val read_objectives : solver -> unit
+val get_objectives : Solver.t -> unit
 
 (** [check_sat solver] runs the command [(check-sat)] *)
-val check_sat : solver -> check_sat_result
+val check_sat : Solver.t -> check_sat_result
 
 (** [check_sat using tactic solver] runs the command
     [(check-sat-using tactic)] *)
-val check_sat_using : tactic -> solver -> check_sat_result
+val check_sat_using : tactic -> Solver.t -> check_sat_result
 
 (** Variable identifier with an associated [sort] *)
 type sorted_var = identifier * sort
 
 (** [get_model solver] runs the command [(get-model)] *)
-val get_model : solver -> (identifier * sort * sorted_var list * term) list
+val get_model : Solver.t -> (identifier * sort * sorted_var list * term) list
 
 (** [get_value solver e] runs the command [(get-value e)] *)
-val get_value : solver -> term -> term
+val get_value : Solver.t -> term -> term
 
 (** [push solver] runs the command [(push)] *)
-val push : solver -> unit
+val push : Solver.t -> unit
 
 (** [pop solver] runs the command [(pop)] *)
-val pop : solver -> unit
+val pop : Solver.t -> unit
 
 (** The expression [Int] for the solver. *)
 val int_sort : sort
@@ -198,23 +204,9 @@ val bvule : term -> term -> term
 val bvneg : term -> term
 val bvnot : term -> term
 
-(** {1 Low-level interface} *)
-
-(** The variant of s-expressions used by SMT-LIB. *)
-type sexp = Smtlib_syntax.sexp =
-  | SList of sexp list
-  | SSymbol of string
-  | SString of string
-  | SKeyword of string
-  | SInt of int
-  | SBitVec of int * int
-  | SBitVec64 of int64
-
-(** [command solver sexp] sends a command to the solver and reads a response. *)
-val command : solver -> sexp -> sexp
 
 (** [term_to_sexp term] returns the term as an s-expression. *)
-val term_to_sexp : term -> sexp
+val term_to_sexp : term -> Sexp.t
 
 (** [sexp_to_string sexp] returns the s-expressions as a string. *)
-val sexp_to_string : sexp -> string
+val sexp_to_string : Sexp.t -> string
