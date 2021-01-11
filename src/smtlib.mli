@@ -20,22 +20,11 @@ val make_solver : string -> solver
  command, that error is raised as an OCaml exception.
 *)
 
-type identifier =
-  | Id of string
+type identifier = Id of string
 
-type sort =
-  | Sort of identifier
-  | SortApp of identifier * sort list
-  | BitVecSort of int
+type sort
 
-type term =
-  | String of string
-  | Int of int
-  | BitVec of int * int
-  | BitVec64 of int64
-  | Const of identifier
-  | App of identifier * term list
-  | Let of string * term * term
+type term
 
 (** Tactics to configure z3's solver strategy. *)
 type tactic =
@@ -114,6 +103,8 @@ val bool_to_term : bool -> term
 (** [const x] produces [Const (Id x)], which represents a reference to a
     variable declared with [(declare-const x sort)] *)
 val const : string -> term
+
+val apply : string -> term -> term
 
 (** [equals e1 e2] produces [(= e1 e2)] *)
 val equals : term -> term -> term

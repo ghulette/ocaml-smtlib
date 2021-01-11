@@ -330,6 +330,8 @@ let app2 x term1 term2 = App (Id x, [term1; term2])
 
 let app1 x term = App (Id x, [term])
 
+let apply = app1
+
 let equals = app2 "="
 
 let and_ term1 term2 = match (term1, term2) with
