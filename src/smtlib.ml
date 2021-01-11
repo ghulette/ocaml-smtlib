@@ -330,7 +330,7 @@ let app2 x term1 term2 = App (Id x, [term1; term2])
 
 let app1 x term = App (Id x, [term])
 
-let apply = app1
+let apply x terms = App (Id x, terms)
 
 let equals = app2 "="
 

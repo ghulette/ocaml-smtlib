@@ -104,7 +104,7 @@ val bool_to_term : bool -> term
     variable declared with [(declare-const x sort)] *)
 val const : string -> term
 
-val apply : string -> term -> term
+val apply : string -> term list -> term
 
 (** [equals e1 e2] produces [(= e1 e2)] *)
 val equals : term -> term -> term
