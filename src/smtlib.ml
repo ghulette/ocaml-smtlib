@@ -166,7 +166,7 @@ type tactic =
   | UsingParams of tactic * (string * bool) list
   | Then of tactic list
 
-let rec tactic_to_sexp (t : tactic) : sexp = match t with
+let rec tactic_to_sexp = function
   | Simplify -> SSymbol "simplify"
   | SolveEQs -> SSymbol "solve-eqs"
   | BitBlast -> SSymbol "bit-blast"
@@ -182,16 +182,16 @@ let rec tactic_to_sexp (t : tactic) : sexp = match t with
   | Then ts ->
     SList ((SSymbol "then") :: List.map tactic_to_sexp ts)
 
-let id_to_sexp (id : identifier) : sexp = match id with
+let id_to_sexp = function
   | Id x -> SSymbol x
 
-let rec sort_to_sexp (sort : sort) : sexp = match sort with
+let rec sort_to_sexp = function
   | Sort x -> id_to_sexp x
   | SortApp (x, sorts) ->
     SList ((id_to_sexp x) :: (List.map sort_to_sexp sorts))
   | BitVecSort n -> SList [ SSymbol "_"; SSymbol "BitVec"; SInt n ]
 
-let rec term_to_sexp (term : term) : sexp = match term with
+let rec term_to_sexp = function
   | String s -> SString s
   | Int n -> SInt n
   | BitVec (n, w) -> SBitVec (n, w)
@@ -203,7 +203,7 @@ let rec term_to_sexp (term : term) : sexp = match term with
            SList [SList [SSymbol x; term_to_sexp term1]];
            term_to_sexp term2]
 
-let rec sexp_to_term (sexp : sexp) : term = match sexp with
+let rec sexp_to_term = function
   | SString s -> String s
   | SInt n -> Int n
   | SBitVec (n, w) -> BitVec (n, w)
@@ -212,12 +212,12 @@ let rec sexp_to_term (sexp : sexp) : term = match sexp with
   | SList (SSymbol "-" :: SInt x :: []) -> Int (-x)
   | _ -> failwith "unparsable term"
 
-let expect_success (solver : solver) (sexp : sexp) : unit =
+let expect_success solver sexp =
   match command solver sexp with
   | SSymbol "success" -> ()
   | SList [SSymbol "error"; SString x] -> failwith x
   | sexp -> failwith ("expected either success or error from solver, got " ^
-                     (sexp_to_string sexp))
+                     sexp_to_string sexp)
 
 let declare_const (solver : solver) (id : identifier) (sort : sort) : unit =
   expect_success solver
@@ -269,7 +269,7 @@ let rec check_sat (solver : solver) : check_sat_result =
     | SList sexp -> read_sat @@ read solver
     | sexp -> fail sexp
   in
-  read_sat @@ command solver (SList [SSymbol "check-sat"])
+  read_sat (command solver (SList [SSymbol "check-sat"]))
 
 let rec check_sat_using (tactic : tactic) (solver : solver) : check_sat_result =
   let fail sexp = failwith ("unexpected result from (check-sat-using), got " ^ sexp_to_string sexp) in
